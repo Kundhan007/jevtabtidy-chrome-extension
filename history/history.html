@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TabTidy – closed tabs</title>
+  <link rel="stylesheet" href="history.css" />
+</head>
+<body>
+  <header>
+    <h1>Closed tabs</h1>
+    <p id="summary" class="muted"></p>
+    <div class="row">
+      <input type="search" id="search" placeholder="Filter by title, URL or reason" />
+      <label><input type="checkbox" id="showDry" /> Include dry-run entries</label>
+      <button type="button" id="csv">Download CSV</button>
+      <button type="button" id="clear">Clear</button>
+    </div>
+  </header>
+
+  <main id="days"></main>
+
+  <script type="module" src="history.js"></script>
+</body>
+</html>
