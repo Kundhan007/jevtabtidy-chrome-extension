@@ -23,6 +23,7 @@ export function redact(value) {
 export function clean(data) {
   const out = {};
   for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
     const plain = typeof value === "number" || typeof value === "boolean" || value === null;
     out[key] = plain ? value : redact(value).replace(/\s+/g, " ").slice(0, 160);
   }
