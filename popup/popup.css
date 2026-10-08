@@ -79,7 +79,8 @@ code { background: #eef0f7; border-radius: 4px; padding: 1px 5px; }
   text-decoration: none;
   background: var(--card);
 }
-.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button.btn { width: 100%; font: inherit; margin-bottom: 8px; }
 .links { margin: 10px 0 0; text-align: center; }
 .links a { color: var(--muted); text-decoration: none; }
 .links a:hover { color: var(--accent); }

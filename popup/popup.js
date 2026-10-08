@@ -3,6 +3,7 @@
 
 import { loadConfig } from "../src/config.js";
 import { activate, deactivate, getLicense, mask } from "../src/license.js";
+import { getClosedLog, lastBatch, undoLast } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
 
 const $ = (id) => document.getElementById(id);
@@ -25,6 +26,13 @@ function setState(text, cls = "") {
 async function renderLast() {
   const { lastRun } = await chrome.storage.local.get("lastRun");
   $("last").textContent = describeRun(lastRun);
+}
+
+/** Label and enable the undo button from the newest real closing pass. */
+async function renderUndo() {
+  const count = lastBatch(await getClosedLog()).length;
+  $("undo").disabled = count === 0;
+  $("undo").textContent = count === 0 ? "Nothing to undo" : `Undo last close (${count})`;
 }
 
 /** "Key checked 3:04 PM" so the user can tell the check really happened. */
@@ -56,6 +64,7 @@ async function render() {
   else setState(`${license.message} ${checkedLabel(license)}`, cls);
 
   await renderLast();
+  await renderUndo();
   focusGate();
 }
 
@@ -91,6 +100,14 @@ $("run").addEventListener("click", async () => {
   await chrome.runtime.sendMessage({ type: "tidy-now" });
   busy(false);
   await render();
+});
+
+$("undo").addEventListener("click", async () => {
+  busy(true);
+  const reopened = await undoLast();
+  busy(false);
+  await render();
+  setState(`Reopened ${reopened} tab${reopened === 1 ? "" : "s"}.`, "ok");
 });
 
 $("options").addEventListener("click", (event) => {
