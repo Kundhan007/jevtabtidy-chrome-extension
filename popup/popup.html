@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TabTidy</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <h1>TabTidy</h1>
+
+  <section id="gate">
+    <label>API key
+      <input type="password" id="key" autocomplete="off" spellcheck="false" />
+    </label>
+    <button type="button" id="activate">Activate</button>
+  </section>
+
+  <section id="active" hidden>
+    <p>Key <code id="masked"></code> <button type="button" id="remove">Remove</button></p>
+    <button type="button" id="run">Tidy now</button>
+  </section>
+
+  <p id="state" class="state"></p>
+  <p id="last" class="muted"></p>
+  <p class="links"><a href="../history/history.html" target="_blank" id="history">Closed tabs</a> · <a href="#" id="options">Settings</a></p>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
