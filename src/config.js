@@ -1,6 +1,8 @@
-// Config: defaults, sanitising and chrome.storage persistence.
-// All thresholds are minutes. Patterns are substrings of "hostname + pathname"
-// (see rules.js), e.g. "google.com/search" or "jira.".
+// Config: the full list of settings, their defaults and their limits, plus
+// sanitise(). Nothing here touches storage or files; brain.js layers
+// brain.yaml and the Settings page on top of these defaults.
+// Thresholds are minutes unless the name says hours. Patterns are substrings of
+// "hostname + pathname" (see rules.js), e.g. "google.com/search" or "jira.".
 
 export const COLORS = [
   "grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange",
@@ -24,21 +26,37 @@ export const DEFAULTS = {
   liveWindowHours: 24,
   // Collapse a group when every tab in it has been idle this long.
   collapseAfterMin: 10,
-  // Close ungrouped, unrecognised tabs idle this long.
+  // Close ungrouped, unrecognised tabs idle this long (local fallback rules).
   staleAfterMin: 60,
   // Close "forgotten" tabs (search results, remote desktop) idle this long.
   forgottenAfterMin: 15,
-  // Where the key is checked once on Activate (a tiny probe call).
+  // Jev is asked only about tabs idle at least this long (fresher ones are left alone).
+  askAfterMin: 15,
+  // Most tabs asked about per call; the idlest go first.
+  maxTabsPerCall: 40,
+  // Jev must be at least this sure (0.5-1) before a tab is closed / grouped.
+  closeConfidence: 0.75,
+  groupConfidence: 0.6,
+  // Jev model name, and where the key is checked once on Activate (a tiny probe call).
+  model: JEV_MODEL,
   verifyUrl: JEV_URL,
   // Jev's decision endpoint. If it is unreachable the local rules below decide.
   decideUrl: JEV_URL,
   // Plain-language guidance sent to Jev with every decision call. This is how
-  // you steer it without listing sites; edit it in Settings.
+  // you steer it without listing sites.
   policy:
     "Close tabs the user has clearly finished with or forgot: stale search " +
     "results, idle remote-desktop pages, one-off lookups. Keep anything related " +
     "to the user's most recent tabs (see focus) and reference material they " +
     "are likely to return to. When unsure, keep the tab.",
+  // Broad buckets Jev sorts kept tabs into; "hint" tells it what belongs. "close"
+  // and "keep" are reserved. An empty list means Jev only closes or keeps.
+  categories: [
+    { name: "Work", color: "blue", hint: "Issue trackers, code hosting, internal tools, docs for the user's job" },
+    { name: "Reference", color: "grey", hint: "Documentation, articles, Q&A the user may come back to" },
+    { name: "Communication", color: "green", hint: "Email, chat, calendar, meetings" },
+    { name: "Media", color: "pink", hint: "Video, music, social, shopping, news" },
+  ],
   // Local fallback rules, used only when Jev is off or unreachable. Matching
   // ungrouped tabs are pulled into a group named after the service. The
   // extension never closes a tab that sits in a group, so these groups never
@@ -70,7 +88,24 @@ export const DEFAULTS = {
   ],
 };
 
-const STORE_KEY = "config";
+// Every numeric setting with its [min, max]. sanitise() clamps to these and
+// brain.js reports a problem when brain.yaml goes outside them.
+export const NUMBERS = {
+  intervalMinutes: [5, 120],
+  keepRecent: [1, 50],
+  minGroupSize: [1, 50],
+  idleCloseHours: [1, 720],
+  liveWindowHours: [1, 168],
+  collapseAfterMin: [1, 1440],
+  staleAfterMin: [5, 10080],
+  forgottenAfterMin: [1, 1440],
+  askAfterMin: [1, 1440],
+  maxTabsPerCall: [1, 200],
+  closeConfidence: [0.5, 1],
+  groupConfidence: [0.5, 1],
+};
+
+const RESERVED = ["close", "keep"];
 
 /** Clamp to [min, max]; fall back when the value is not a finite number. */
 function num(value, fallback, min, max) {
@@ -85,7 +120,7 @@ function strings(value, fallback) {
 }
 
 /** Trimmed https URL, or "" for anything else (http, junk, empty). */
-function httpsUrl(value) {
+export function httpsUrl(value) {
   const text = String(value ?? "").trim();
   try {
     return new URL(text).protocol === "https:" ? text : "";
@@ -107,39 +142,37 @@ function services(value, fallback) {
   return out;
 }
 
-/** Turn whatever is in storage (or the options form) into a safe config. */
+/** Unique names, none of the reserved ones; a bad color becomes grey. */
+function categories(value, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  const seen = new Set();
+  const out = [];
+  for (const c of value) {
+    const name = String(c?.name ?? "").trim().slice(0, 30);
+    if (!name || RESERVED.includes(name.toLowerCase()) || seen.has(name)) continue;
+    seen.add(name);
+    const color = COLORS.includes(c.color) ? c.color : "grey";
+    out.push({ name, color, hint: String(c?.hint ?? "").trim().slice(0, 200) });
+  }
+  return out;
+}
+
+/** Turn whatever is in a file, storage or the Settings form into a safe config. */
 export function sanitize(raw = {}) {
   const d = DEFAULTS;
+  const numbers = {};
+  for (const [key, [min, max]] of Object.entries(NUMBERS)) {
+    numbers[key] = num(raw[key], d[key], min, max);
+  }
   return {
-    intervalMinutes: num(raw.intervalMinutes, d.intervalMinutes, 5, 120),
-    keepRecent: num(raw.keepRecent, d.keepRecent, 1, 50),
-    minGroupSize: num(raw.minGroupSize, d.minGroupSize, 1, 50),
-    idleCloseHours: num(raw.idleCloseHours, d.idleCloseHours, 1, 720),
-    liveWindowHours: num(raw.liveWindowHours, d.liveWindowHours, 1, 168),
-    collapseAfterMin: num(raw.collapseAfterMin, d.collapseAfterMin, 1, 1440),
-    staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
-    forgottenAfterMin: num(raw.forgottenAfterMin, d.forgottenAfterMin, 1, 1440),
-    // Empty or invalid falls back to the default, so a blank saved box cannot switch Jev off.
+    ...numbers,
+    model: String(raw.model ?? "").trim().slice(0, 60) || d.model,
+    // Empty or invalid falls back to the default, so a blank box cannot switch Jev off.
     verifyUrl: httpsUrl(raw.verifyUrl) || d.verifyUrl,
     decideUrl: httpsUrl(raw.decideUrl) || d.decideUrl,
     policy: String(raw.policy ?? "").trim().slice(0, 2000) || d.policy,
+    categories: categories(raw.categories, d.categories),
     services: services(raw.services, d.services),
     forgotten: strings(raw.forgotten, d.forgotten),
   };
-}
-
-export async function loadConfig() {
-  const stored = await chrome.storage.sync.get(STORE_KEY);
-  return sanitize(stored[STORE_KEY]);
-}
-
-export async function saveConfig(cfg) {
-  const clean = sanitize(cfg);
-  await chrome.storage.sync.set({ [STORE_KEY]: clean });
-  return clean;
-}
-
-export async function resetConfig() {
-  await chrome.storage.sync.remove(STORE_KEY);
-  return sanitize();
 }
