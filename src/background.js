@@ -10,9 +10,10 @@ import {
   sortAllWindows,
   wantedFromAssignments,
 } from "./groups.js";
-import { plan } from "./jev.js";
+import { ASK_AFTER_MIN, plan } from "./jev.js";
 import {
   clearPulse,
+  describeKept,
   isBackgroundChange,
   keepSet,
   loadPulse,
@@ -78,7 +79,8 @@ export async function tidy() {
     // Never-touch list: the last N used tabs and tabs that change in the background.
     const allTabs = await chrome.tabs.query({});
     await prunePulse(allTabs);
-    const keep = keepSet(allTabs, cfg, await loadPulse(), now);
+    const pulse = await loadPulse();
+    const keep = keepSet(allTabs, cfg, pulse, now);
     info("pass.start", { tabs: allTabs.length, kept: keep.size, jev: Boolean(cfg.decideUrl) });
 
     const planned = await plan(
@@ -114,6 +116,7 @@ export async function tidy() {
     });
 
     const tabs = await chrome.tabs.query({});
+    info("pass.kept", describeKept(tabs, cfg, pulse, now, planned.askedIds ?? [], ASK_AFTER_MIN));
     status.collapsed = await step(status, "collapse", () =>
       collapseIdle(tabs, cfg, now),
     );

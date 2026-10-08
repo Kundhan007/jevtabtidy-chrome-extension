@@ -12,7 +12,7 @@
 import { JEV_MODEL } from "./config.js";
 import { clearSession, getToken } from "./license.js";
 import { info, warn } from "./log.js";
-import { recentIds } from "./keep.js";
+import { recentIds, siteOf } from "./keep.js";
 import { NONE, classify, idleMinutes, isBrowserPage, isProtected } from "./rules.js";
 
 // Broad, fixed buckets so nobody has to list sites. "keep" = no group fits.
@@ -27,7 +27,7 @@ const CLOSE = "close";
 const CLOSE_P = 0.75; // act on "close" only when Jev is at least this sure
 const GROUP_P = 0.6; // and group only at this much confidence
 const MAX_TABS = 40; // questions per call; the most idle tabs go first
-const ASK_AFTER_MIN = 15; // tabs used more recently than this are left alone
+export const ASK_AFTER_MIN = 15; // tabs used more recently than this are left alone
 
 const CRITERIA = {
   [CLOSE]: "The user has finished with it or forgot it (stale search, idle remote desktop, one-off lookup)",
@@ -86,6 +86,7 @@ const pct = (p) => Math.round(p * 100);
  */
 export function parseDecision(data, asked, minGroup = 1) {
   const close = [];
+  const judged = []; // every usable answer, so callers can explain what was kept
   const why = {};
   const buckets = new Map(); // category name -> { color, tabIds }
 
@@ -94,6 +95,7 @@ export function parseDecision(data, asked, minGroup = 1) {
     if (answer?.type !== "choice" || typeof answer.choice !== "string") continue;
     const p = Number(answer.probabilities?.[answer.choice] ?? answer.confidence);
     if (!(p >= 0)) continue;
+    judged.push({ id: tab.id, choice: answer.choice, p });
 
     if (answer.choice === CLOSE) {
       if (p >= CLOSE_P) {
@@ -112,7 +114,7 @@ export function parseDecision(data, asked, minGroup = 1) {
   const groups = [...buckets]
     .filter(([, { tabIds }]) => tabIds.length >= minGroup)
     .map(([name, { color, tabIds }]) => ({ name, color, tabIds }));
-  return { close, groups, why };
+  return { close, groups, why, judged };
 }
 
 /** The raw POST. Returns {status: ok|unauthorized|error, data?, message?}. */
@@ -137,6 +139,19 @@ export async function decide(url, token, body, fetchImpl = fetch, timeoutMs = 20
   }
 }
 
+/** One line per tab Jev looked at and left open, saying why. */
+function explainKept(decision, asked) {
+  const byId = new Map(asked.map((t) => [t.id, t]));
+  for (const { id, choice, p } of decision.judged) {
+    if (decision.close.includes(id)) continue;
+    const why =
+      choice === CLOSE
+        ? `wanted close at ${pct(p)}%, below the ${pct(CLOSE_P)}% bar`
+        : `Jev says ${choice} (${pct(p)}%)`;
+    info("jev.kept", { host: siteOf(byId.get(id)?.url || ""), why });
+  }
+}
+
 /**
  * Ask Jev what to do. via: "jev" (decision attached), "local" (no decideUrl
  * set), or "fallback" (Jev unusable, reason attached; caller uses local rules).
@@ -146,7 +161,7 @@ export async function plan(cfg, tabs, groups, now = Date.now(), keep = new Set()
   if (!cfg.decideUrl) return { via: "local" };
   const { request, asked } = buildRequest(tabs, groups, now, cfg, keep);
   info("jev.request", { asked: asked.length, candidates: tabs.length });
-  if (asked.length === 0) return { via: "jev", decision: { close: [], groups: [], why: {} } };
+  if (asked.length === 0) return { via: "jev", decision: { close: [], groups: [], why: {}, judged: [] }, askedIds: [] };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const token = await getToken(cfg.verifyUrl);
@@ -158,7 +173,8 @@ export async function plan(cfg, tabs, groups, now = Date.now(), keep = new Set()
     if (res.status === "ok") {
       const decision = parseDecision(res.data, asked, cfg.minGroupSize);
       info("jev.decision", { close: decision.close.length, groups: decision.groups.length });
-      return { via: "jev", decision };
+      explainKept(decision, asked);
+      return { via: "jev", decision, askedIds: asked.map((t) => t.id) };
     }
     if (res.status === "unauthorized") {
       warn("jev.unauthorized", { action: "clearing session and retrying once" });

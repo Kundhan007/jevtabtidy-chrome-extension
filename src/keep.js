@@ -11,7 +11,7 @@
 // ponytail: a page that changes inside without touching title/icon (a dashboard)
 // looks static. Group such tabs, or add a content script if that ever matters.
 
-import { hostPath } from "./rules.js";
+import { NONE, hostPath } from "./rules.js";
 
 const PULSE_KEY = "pulse";
 const WRITE_GAP_MS = 60_000; // one pulse per tab per minute, never a storage storm
@@ -59,6 +59,31 @@ export function keepSet(tabs, cfg, pulse, now) {
   const keep = recentIds(tabs, cfg.keepRecent);
   for (const id of liveIds(tabs, pulse, now, cfg.liveWindowHours)) keep.add(id);
   return keep;
+}
+
+/**
+ * Why each open tab is still open, as counts. Each tab lands in the first bucket
+ * that applies: pinned, grouped, playing, recent, live, fresh (used within
+ * askAfterMin), judged (Jev saw it and kept it) or other (non-web pages, past
+ * the per-call cap).
+ */
+export function describeKept(tabs, cfg, pulse, now, askedIds, askAfterMin) {
+  const recent = recentIds(tabs, cfg.keepRecent);
+  const live = liveIds(tabs, pulse, now, cfg.liveWindowHours);
+  const asked = new Set(askedIds);
+  const counts = { total: tabs.length, pinned: 0, grouped: 0, playing: 0, recent: 0, live: 0, fresh: 0, judged: 0, other: 0 };
+  for (const tab of tabs) {
+    const idleMin = (now - (tab.lastAccessed ?? now)) / 60_000;
+    if (tab.pinned) counts.pinned += 1;
+    else if (tab.groupId !== NONE) counts.grouped += 1;
+    else if (tab.audible) counts.playing += 1;
+    else if (recent.has(tab.id)) counts.recent += 1;
+    else if (live.has(tab.id)) counts.live += 1;
+    else if (idleMin < askAfterMin) counts.fresh += 1;
+    else if (asked.has(tab.id)) counts.judged += 1;
+    else counts.other += 1;
+  }
+  return counts;
 }
 
 /** Is this tabs.onUpdated event a background change worth counting? */
