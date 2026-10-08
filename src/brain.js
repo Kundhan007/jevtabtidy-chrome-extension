@@ -7,7 +7,7 @@
 // brainProblems() explains what is wrong with brain.yaml in plain sentences, so
 // an agent that edited it badly can read the message and fix it.
 
-import { COLORS, DEFAULTS, NUMBERS, httpsUrl, sanitize } from "./config.js";
+import { COLORS, DEFAULTS, NUMBERS, sanitize } from "./config.js";
 import { load } from "./vendor/js-yaml.mjs";
 
 const STORE_KEY = "config";
@@ -27,9 +27,6 @@ export function brainProblems(raw) {
     const n = Number(raw[key]);
     if (!Number.isFinite(n)) out.push(`"${key}" must be a number, got ${JSON.stringify(raw[key])}`);
     else if (n < min || n > max) out.push(`"${key}" is ${n}, outside ${min}-${max}; it will be clamped`);
-  }
-  for (const key of ["verifyUrl", "decideUrl"]) {
-    if (key in raw && !httpsUrl(raw[key])) out.push(`"${key}" must be an https URL; the default is used instead`);
   }
   for (const key of ["policy", "model"]) {
     if (key in raw && !String(raw[key] ?? "").trim()) out.push(`"${key}" is empty; the default is used instead`);

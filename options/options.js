@@ -1,7 +1,6 @@
 // Options page: edit config, trigger a pass, browse the closed-tab log.
 
 import { brainText, loadBrain, loadConfig, resetConfig, revertBrainText, saveBrainText, saveConfig } from "../src/brain.js";
-import { requestOrigin } from "../src/license.js";
 import { clearLog, countLevels, filterLevel, formatLog, getLog, info } from "../src/log.js";
 import { clearClosedLog, getClosedLog, reopen } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
@@ -21,8 +20,6 @@ const NUMBERS = [
 /** Fill the form from a config object. */
 function render(cfg) {
   for (const key of NUMBERS) $(key).value = cfg[key];
-  $("verifyUrl").value = cfg.verifyUrl;
-  $("decideUrl").value = cfg.decideUrl;
   $("policy").value = cfg.policy;
   $("services").value = JSON.stringify(cfg.services, null, 2);
   $("forgotten").value = cfg.forgotten.join("\n");
@@ -32,8 +29,6 @@ function render(cfg) {
 function readForm() {
   const raw = {};
   for (const key of NUMBERS) raw[key] = $(key).value;
-  raw.verifyUrl = $("verifyUrl").value;
-  raw.decideUrl = $("decideUrl").value;
   raw.policy = $("policy").value;
   raw.services = JSON.parse($("services").value);
   raw.forgotten = $("forgotten").value.split("\n");
@@ -124,9 +119,7 @@ $("form").addEventListener("submit", async (event) => {
     const saved = await saveConfig(readForm());
     info("settings.saved", { intervalMin: saved.intervalMinutes, keepRecent: saved.keepRecent });
     render(saved);
-    // Needs this click: lets the extension call both URLs (one prompt).
-    const granted = await requestOrigin(saved.verifyUrl, saved.decideUrl);
-    showError(granted ? "" : "Saved, but access to the verify/decision URL was not granted.");
+    showError("");
   } catch (err) {
     showError(`Not saved: ${err.message}`);
   }

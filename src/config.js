@@ -37,11 +37,8 @@ export const DEFAULTS = {
   // Jev must be at least this sure (0.5-1) before a tab is closed / grouped.
   closeConfidence: 0.75,
   groupConfidence: 0.6,
-  // Jev model name, and where the key is checked once on Activate (a tiny probe call).
+  // Jev model name. If Jev is unreachable the local rules below decide.
   model: JEV_MODEL,
-  verifyUrl: JEV_URL,
-  // Jev's decision endpoint. If it is unreachable the local rules below decide.
-  decideUrl: JEV_URL,
   // Plain-language guidance sent to Jev with every decision call. This is how
   // you steer it without listing sites.
   policy:
@@ -119,16 +116,6 @@ function strings(value, fallback) {
   return value.map((s) => String(s).trim()).filter(Boolean);
 }
 
-/** Trimmed https URL, or "" for anything else (http, junk, empty). */
-export function httpsUrl(value) {
-  const text = String(value ?? "").trim();
-  try {
-    return new URL(text).protocol === "https:" ? text : "";
-  } catch {
-    return "";
-  }
-}
-
 function services(value, fallback) {
   if (!Array.isArray(value)) return fallback;
   const out = [];
@@ -167,9 +154,6 @@ export function sanitize(raw = {}) {
   return {
     ...numbers,
     model: String(raw.model ?? "").trim().slice(0, 60) || d.model,
-    // Empty or invalid falls back to the default, so a blank box cannot switch Jev off.
-    verifyUrl: httpsUrl(raw.verifyUrl) || d.verifyUrl,
-    decideUrl: httpsUrl(raw.decideUrl) || d.decideUrl,
     policy: String(raw.policy ?? "").trim().slice(0, 2000) || d.policy,
     categories: categories(raw.categories, d.categories),
     services: services(raw.services, d.services),

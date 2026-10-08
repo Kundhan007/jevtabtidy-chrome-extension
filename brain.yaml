@@ -46,9 +46,6 @@ groupConfidence: 0.6
 # A kept tab joins a group only when this many tabs share its category.
 minGroupSize: 5
 model: jev-latest
-# Both default to TypeSafe. The key is checked once when you press Activate.
-verifyUrl: https://api.typesafe.ai/v1/systemone
-decideUrl: https://api.typesafe.ai/v1/systemone
 
 # Plain-language guidance sent with every decision. This is the main steering
 # wheel: describe what you do and what you are done with, no site lists needed.
