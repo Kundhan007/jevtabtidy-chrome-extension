@@ -7,8 +7,9 @@ export const COLORS = [
 ];
 
 export const DEFAULTS = {
-  // How often the alarm fires. Chrome allows >= 0.5, we clamp to >= 1.
-  intervalMinutes: 5,
+  // Low-priority housekeeping: every 15 min is plenty. Clamped to >= 5 so it
+  // can never become a steady load on the browser.
+  intervalMinutes: 15,
   // true = only log what would be closed. Flip to false once the log looks right.
   dryRun: true,
   // Collapse a group when every tab in it has been idle this long.
@@ -102,7 +103,7 @@ function services(value, fallback) {
 export function sanitize(raw = {}) {
   const d = DEFAULTS;
   return {
-    intervalMinutes: num(raw.intervalMinutes, d.intervalMinutes, 1, 120),
+    intervalMinutes: num(raw.intervalMinutes, d.intervalMinutes, 5, 120),
     dryRun: raw.dryRun === undefined ? d.dryRun : Boolean(raw.dryRun),
     collapseAfterMin: num(raw.collapseAfterMin, d.collapseAfterMin, 1, 1440),
     staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
