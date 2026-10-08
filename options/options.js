@@ -2,6 +2,7 @@
 
 import { loadConfig, resetConfig, saveConfig } from "../src/config.js";
 import { requestOrigin } from "../src/license.js";
+import { clearLog, countLevels, formatLog, getLog, info } from "../src/log.js";
 import { clearClosedLog, getClosedLog, reopen } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
 
@@ -83,6 +84,7 @@ $("form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const saved = await saveConfig(readForm());
+    info("settings.saved", { dryRun: saved.dryRun, intervalMin: saved.intervalMinutes, keepRecent: saved.keepRecent });
     render(saved);
     // Needs this click: lets the extension call both URLs (one prompt).
     const granted = await requestOrigin(saved.verifyUrl, saved.decideUrl);
@@ -100,7 +102,28 @@ $("reset").addEventListener("click", async () => {
 $("run").addEventListener("click", async () => {
   $("status").textContent = "Running…";
   await chrome.runtime.sendMessage({ type: "tidy-now" });
-  await Promise.all([renderStatus(), renderLog()]);
+  await Promise.all([renderStatus(), renderLog(), renderActivity()]);
+});
+
+async function renderActivity() {
+  const entries = await getLog();
+  const { info: infos, warn: warns, error: errors } = countLevels(entries);
+  $("logCounts").textContent = `${infos} info, ${warns} warnings, ${errors} errors`;
+  $("activity").textContent = entries.length > 0 ? formatLog(entries) : "No activity yet.";
+}
+
+$("logRefresh").addEventListener("click", renderActivity);
+$("logClear").addEventListener("click", async () => {
+  await clearLog();
+  await renderActivity();
+});
+$("logCopy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("activity").textContent);
+  showError("Activity log copied.");
+});
+// New events show up without a manual refresh.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.activityLog) renderActivity();
 });
 
 $("clearLog").addEventListener("click", async () => {
@@ -109,4 +132,4 @@ $("clearLog").addEventListener("click", async () => {
 });
 
 render(await loadConfig());
-await Promise.all([renderStatus(), renderLog()]);
+await Promise.all([renderStatus(), renderLog(), renderActivity()]);

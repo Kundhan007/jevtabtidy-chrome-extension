@@ -6,6 +6,7 @@ textarea { font: 12px ui-monospace, monospace; width: 100%; box-sizing: border-b
 .row { display: flex; gap: 0.5rem; }
 .muted { color: #666; }
 .error { color: #b00020; min-height: 1.2em; }
+.activity { max-height: 320px; overflow: auto; padding: 8px; background: #f4f4f6; font: 11px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
 td.url { word-break: break-all; color: #666; }

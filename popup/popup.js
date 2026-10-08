@@ -3,6 +3,7 @@
 
 import { loadConfig, saveConfig } from "../src/config.js";
 import { activate, deactivate, getLicense, mask } from "../src/license.js";
+import { getLog, info, lastError, warn } from "../src/log.js";
 import { getClosedLog, lastBatch, undoLast } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
 
@@ -26,6 +27,10 @@ function setState(text, cls = "") {
 async function renderLast() {
   const { lastRun } = await chrome.storage.local.get("lastRun");
   $("last").textContent = describeRun(lastRun);
+  // Surface the newest error so a silent failure is visible without opening Settings.
+  const err = lastError(await getLog());
+  $("lasterr").hidden = err === "";
+  $("lasterr").textContent = err;
 }
 
 /** Label and enable the undo button from the newest real closing pass. */
@@ -81,7 +86,9 @@ $("activate").addEventListener("click", async () => {
   setState("Checking…");
   try {
     const cfg = await loadConfig();
-    await activate($("key").value, cfg.verifyUrl);
+    const license = await activate($("key").value, cfg.verifyUrl);
+    // The key itself is never logged, only how the check ended.
+    (license.state === "ok" || license.state === "unverified" ? info : warn)("key.activate", { state: license.state });
     $("key").value = "";
   } catch (err) {
     setState(`Something went wrong: ${err.message}`, "bad");
@@ -99,6 +106,7 @@ $("key").addEventListener("keydown", (event) => {
 
 $("remove").addEventListener("click", async () => {
   await deactivate();
+  info("key.removed");
   await render();
 });
 
@@ -112,6 +120,7 @@ $("run").addEventListener("click", async () => {
 
 $("dryoff").addEventListener("click", async () => {
   await saveConfig({ ...(await loadConfig()), dryRun: false });
+  info("setting.dryRun", { dryRun: false, via: "popup" });
   await render();
 });
 
