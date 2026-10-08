@@ -25,6 +25,20 @@ export function openSpan(entry, now = Date.now()) {
   return `${stamp(entry.openedAt, now)} – ${stamp(entry.at, now)}`;
 }
 
+/** Full local date and time with seconds, shown on hover for precision. */
+export function exact(ts) {
+  return ts ? new Date(ts).toLocaleString() : "unknown";
+}
+
+/** Hover text: the exact open, closed and last-used moments. */
+export function tooltip(entry) {
+  return [
+    `Opened: ${exact(entry.openedAt)}`,
+    `Closed: ${exact(entry.at)}`,
+    `Last used: ${exact(entry.lastAccessed)}`,
+  ].join("\n");
+}
+
 function itemFor(entry, now) {
   const item = document.createElement("li");
 
@@ -36,6 +50,7 @@ function itemFor(entry, now) {
 
   const meta = document.createElement("span");
   meta.className = "meta";
+  meta.title = tooltip(entry);
   meta.textContent = `open ${openSpan(entry, now)} · last used ${stamp(entry.lastAccessed, now)}`;
 
   item.append(link, meta);
