@@ -77,7 +77,7 @@ export async function tidy() {
     status.closed = await step(status, "reap", async () => {
       const tabs = await chrome.tabs.query({});
       const victims = decision
-        ? victimsFromIds(tabs, decision.close, cfg)
+        ? victimsFromIds(tabs, decision.close, cfg, decision.why)
         : findVictims(tabs, cfg, now);
       return reap(victims, cfg, now);
     });
