@@ -55,9 +55,12 @@ A broken file never breaks the extension; it falls back to safe values.
 
 ## Privacy
 
-- The key is stored in the browser and sent only to the configured Jev URL as a
-  Bearer token. It is never written to the activity log.
-- Jev receives each asked tab's title and URL (and your recent tabs' titles and URLs as focus), never page contents.
+- The key is stored in the browser and sent only to `api.typesafe.ai` as a Bearer
+  token. It is never written to the activity log.
+- Nothing about your tabs is sent until you tick the consent box in the popup.
+- Jev receives each asked tab's title and address (origin and path only; query
+  string, fragment and credentials are removed), plus your recent tabs as focus.
+  Never page contents. See [PRIVACY.md](PRIVACY.md).
 - Logs record hosts and reasons only.
 
 ## Layout
