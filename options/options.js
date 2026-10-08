@@ -11,6 +11,10 @@ const NUMBERS = [
   "collapseAfterMin",
   "forgottenAfterMin",
   "staleAfterMin",
+  "keepRecent",
+  "minGroupSize",
+  "idleCloseHours",
+  "liveWindowHours",
 ];
 
 /** Fill the form from a config object. */

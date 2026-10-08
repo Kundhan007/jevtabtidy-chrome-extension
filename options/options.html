@@ -14,6 +14,10 @@
     <label>Run every (min) <input type="number" id="intervalMinutes" min="5" /></label>
     <label>Collapse idle groups after (min) <input type="number" id="collapseAfterMin" min="1" /></label>
     <label>Close forgotten tabs after (min) <input type="number" id="forgottenAfterMin" min="1" /></label>
+    <label>Never close the last N used tabs <input type="number" id="keepRecent" min="1" /></label>
+    <label>Group a category only when it has at least N tabs <input type="number" id="minGroupSize" min="1" /></label>
+    <label>With Jev: close untouched ungrouped tabs after (hours) <input type="number" id="idleCloseHours" min="1" /></label>
+    <label>Treat a tab as live if it changed in the background within (hours) <input type="number" id="liveWindowHours" min="1" /></label>
     <label>Close other ungrouped tabs after (min) <input type="number" id="staleAfterMin" min="5" /></label>
 
     <label>Jev key-check URL (called once on Activate; empty = format check only)

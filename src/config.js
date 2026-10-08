@@ -14,6 +14,14 @@ export const DEFAULTS = {
   // Low-priority housekeeping: every 15 min is plenty. Clamped to >= 5 so it
   // can never become a steady load on the browser.
   intervalMinutes: 15,
+  // The N most recently used tabs are never closed.
+  keepRecent: 5,
+  // Jev groups a category only when at least this many tabs share it.
+  minGroupSize: 5,
+  // With Jev on: ungrouped tabs untouched this long close without asking.
+  idleCloseHours: 24,
+  // A tab that changed in the background within this window counts as live.
+  liveWindowHours: 24,
   // true = only log what would be closed. Flip to false once the log looks right.
   dryRun: true,
   // Collapse a group when every tab in it has been idle this long.
@@ -32,7 +40,7 @@ export const DEFAULTS = {
   policy:
     "Close tabs the user has clearly finished with or forgot: stale search " +
     "results, idle remote-desktop pages, one-off lookups. Keep anything related " +
-    "to what the user is working on now (see focus) and reference material they " +
+    "to the user's most recent tabs (see focus) and reference material they " +
     "are likely to return to. When unsure, keep the tab.",
   // Local fallback rules, used only when Jev is off or unreachable. Matching
   // ungrouped tabs are pulled into a group named after the service. The
@@ -107,6 +115,10 @@ export function sanitize(raw = {}) {
   const d = DEFAULTS;
   return {
     intervalMinutes: num(raw.intervalMinutes, d.intervalMinutes, 5, 120),
+    keepRecent: num(raw.keepRecent, d.keepRecent, 1, 50),
+    minGroupSize: num(raw.minGroupSize, d.minGroupSize, 1, 50),
+    idleCloseHours: num(raw.idleCloseHours, d.idleCloseHours, 1, 720),
+    liveWindowHours: num(raw.liveWindowHours, d.liveWindowHours, 1, 168),
     dryRun: raw.dryRun === undefined ? d.dryRun : Boolean(raw.dryRun),
     collapseAfterMin: num(raw.collapseAfterMin, d.collapseAfterMin, 1, 1440),
     staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
