@@ -6,6 +6,10 @@ export const COLORS = [
   "grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange",
 ];
 
+// Jev = TypeSafe AI's System One decision model (docs.typesafe.ai/api).
+export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
+export const JEV_MODEL = "jev-latest";
+
 export const DEFAULTS = {
   // Low-priority housekeeping: every 15 min is plenty. Clamped to >= 5 so it
   // can never become a steady load on the browser.
@@ -18,23 +22,22 @@ export const DEFAULTS = {
   staleAfterMin: 60,
   // Close "forgotten" tabs (search results, remote desktop) idle this long.
   forgottenAfterMin: 15,
-  // https URL that answers 2xx for a good key (sent as Bearer). Empty = the key
-  // only gets a format check and the panel says it was not verified.
-  verifyUrl: "",
-  // https URL of Jev's decision endpoint. Empty = use the local rules below.
-  decideUrl: "",
+  // Where the key is checked once on Activate (a tiny probe call). Empty = the
+  // key only gets a format check and the panel says it was not verified.
+  verifyUrl: JEV_URL,
+  // Jev's decision endpoint. Empty = the local rules below decide.
+  decideUrl: JEV_URL,
   // Plain-language guidance sent to Jev with every decision call. This is how
   // you steer it without listing sites; edit it in Settings.
   policy:
     "Close tabs the user has clearly finished with or forgot: stale search " +
     "results, idle remote-desktop pages, one-off lookups. Keep anything related " +
     "to what the user is working on now (see focus) and reference material they " +
-    "are likely to return to. Group related work tabs under a short descriptive " +
-    "name, for example a Jira board with its tickets and repositories. Give a " +
-    "one-line reason for every tab you close. When unsure, keep the tab.",
-  // Local fallback rules (used only when Jev is off or unreachable). Matching ungrouped tabs are pulled into a group named after
-  // the service. The extension never closes a tab that sits in a group, so
-  // these groups never disappear on their own.
+    "are likely to return to. When unsure, keep the tab.",
+  // Local fallback rules, used only when Jev is off or unreachable. Matching
+  // ungrouped tabs are pulled into a group named after the service. The
+  // extension never closes a tab that sits in a group, so these groups never
+  // disappear on their own.
   services: [
     { name: "Bitbucket", color: "cyan", patterns: ["bitbucket.org"] },
     {
@@ -108,8 +111,9 @@ export function sanitize(raw = {}) {
     collapseAfterMin: num(raw.collapseAfterMin, d.collapseAfterMin, 1, 1440),
     staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
     forgottenAfterMin: num(raw.forgottenAfterMin, d.forgottenAfterMin, 1, 1440),
-    verifyUrl: httpsUrl(raw.verifyUrl),
-    decideUrl: httpsUrl(raw.decideUrl),
+    // Unset = the default URL; an empty string the user saved = switched off.
+    verifyUrl: raw.verifyUrl === undefined ? d.verifyUrl : httpsUrl(raw.verifyUrl),
+    decideUrl: raw.decideUrl === undefined ? d.decideUrl : httpsUrl(raw.decideUrl),
     policy: String(raw.policy ?? "").trim().slice(0, 2000) || d.policy,
     services: services(raw.services, d.services),
     forgotten: strings(raw.forgotten, d.forgotten),

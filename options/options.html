@@ -16,11 +16,11 @@
     <label>Close forgotten tabs after (min) <input type="number" id="forgottenAfterMin" min="1" /></label>
     <label>Close other ungrouped tabs after (min) <input type="number" id="staleAfterMin" min="5" /></label>
 
-    <label>Key verify URL (https, answers 2xx for a valid Bearer key; empty = format check only)
-      <input type="url" id="verifyUrl" placeholder="https://api.example.com/v1/verify" />
+    <label>Jev key-check URL (called once on Activate; empty = format check only)
+      <input type="url" id="verifyUrl" placeholder="https://api.typesafe.ai/v1/systemone" />
     </label>
-    <label>Jev decision URL (https; empty = local rules decide)
-      <input type="url" id="decideUrl" placeholder="https://jev.example.com/v1/decide" />
+    <label>Jev decision URL (empty = local rules decide)
+      <input type="url" id="decideUrl" placeholder="https://api.typesafe.ai/v1/systemone" />
     </label>
     <label>Guidance for Jev (plain language: what to keep, close and group)
       <textarea id="policy" rows="6"></textarea>

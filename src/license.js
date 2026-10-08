@@ -4,6 +4,8 @@
 // ponytail: this is an on/off gate, not security. Anyone can edit the extension.
 // Re-verify on a timer if the key can be revoked server-side.
 
+import { JEV_MODEL } from "./config.js";
+
 const STORE_KEY = "license";
 const SESSION_KEY = "session";
 const SKEW_MS = 30_000; // refresh a token this long before it expires
@@ -21,6 +23,15 @@ export function checkFormat(key) {
 export function mask(key) {
   return key ? `…${key.slice(-4)}` : "";
 }
+
+// TypeSafe documents no free "check key" endpoint, so activation sends the
+// smallest valid evaluation: a 200 means the key works, a 401 means it does not.
+// ponytail: costs a few tokens once per activation (and per expired session).
+const PROBE = {
+  state: "ping",
+  model: JEV_MODEL,
+  questions: { ok: { type: "noul", instructions: "Is this text the word ping?" } },
+};
 
 /** Body of a handshake reply as an object; {} when empty or not JSON. */
 async function readJson(res) {
@@ -51,7 +62,9 @@ export async function verifyKey(key, url, fetchImpl = fetch, timeoutMs = 8000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, {
-      headers: { Authorization: `Bearer ${key}` },
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(PROBE),
       signal: controller.signal,
     });
     if (res.ok) {
