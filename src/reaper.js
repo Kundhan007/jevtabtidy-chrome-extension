@@ -18,10 +18,10 @@ const LOG_MAX = 100;
  *   other tabs close after cfg.staleAfterMin
  *   grouped, pinned, active, audible, service and skipped tabs never close
  */
-export function findVictims(tabs, cfg, now) {
+export function findVictims(tabs, cfg, now, keep = new Set()) {
   const victims = [];
   for (const tab of tabs) {
-    if (tab.groupId !== NONE) continue;
+    if (tab.groupId !== NONE || keep.has(tab.id)) continue;
     if (isProtected(tab)) continue;
 
     const { kind } = classify(tab, cfg);
@@ -46,11 +46,11 @@ export function findVictims(tabs, cfg, now) {
  * Same guard as findVictims: ungrouped, not pinned/active/audible, not a
  * work-service tab, not a non-web page.
  */
-export function victimsFromIds(tabs, ids, cfg, why = {}) {
+export function victimsFromIds(tabs, ids, cfg, why = {}, keep = new Set()) {
   const picked = new Set(ids);
   const victims = [];
   for (const tab of tabs) {
-    if (!picked.has(tab.id) || tab.groupId !== NONE || isProtected(tab)) continue;
+    if (!picked.has(tab.id) || tab.groupId !== NONE || isProtected(tab) || keep.has(tab.id)) continue;
     const { kind } = classify(tab, cfg);
     if (kind === "skip" || kind === "service") continue;
     victims.push({ tab, reason: why[tab.id] ? `jev: ${why[tab.id]}` : `jev (${kind})` });
@@ -79,6 +79,12 @@ export async function recordSeen(tabs, now, prune = false) {
 
 export async function clearSeen() {
   await chrome.storage.local.remove(SEEN_KEY);
+}
+
+/** Merge victim lists, first reason wins, one entry per tab. */
+export function mergeVictims(...lists) {
+  const seen = new Set();
+  return lists.flat().filter(({ tab }) => !seen.has(tab.id) && seen.add(tab.id));
 }
 
 /** Append entries to the closed log, keeping only the newest LOG_MAX. */
