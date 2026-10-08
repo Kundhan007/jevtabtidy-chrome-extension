@@ -11,11 +11,19 @@ import {
   wantedFromAssignments,
 } from "./groups.js";
 import { plan } from "./jev.js";
+import {
+  clearPulse,
+  isBackgroundChange,
+  keepSet,
+  loadPulse,
+  notePulse,
+  prunePulse,
+} from "./keep.js";
 import { isActive } from "./license.js";
-import { isBrowserPage } from "./rules.js";
 import {
   clearSeen,
   findVictims,
+  mergeVictims,
   reap,
   recordSeen,
   victimsFromIds,
@@ -66,11 +74,17 @@ export async function tidy() {
     await recordSeen(await chrome.tabs.query({}), now, true);
 
     // One decision call per pass; uses the cached session, no handshake.
+    // Never-touch list: the last N used tabs and tabs that change in the background.
+    const allTabs = await chrome.tabs.query({});
+    await prunePulse(allTabs);
+    const keep = keepSet(allTabs, cfg, await loadPulse(), now);
+
     const planned = await plan(
       cfg,
-      await chrome.tabs.query({}),
+      allTabs,
       await chrome.tabGroups.query({}),
       now,
+      keep,
     ).catch((err) => ({ via: "fallback", reason: err.message }));
     status.via = planned.via;
     status.reason = planned.reason;
@@ -84,13 +98,15 @@ export async function tidy() {
 
     status.closed = await step(status, "reap", async () => {
       const tabs = await chrome.tabs.query({});
-      // Jev judges web pages; idle New tab / Extensions pages always use the local rule.
+      // Jev's picks, plus anything idle past the hard limit (searches, browser
+      // pages after minutes; everything else after idleCloseHours) with no question asked.
+      const hard = { ...cfg, staleAfterMin: cfg.idleCloseHours * 60 };
       const victims = decision
-        ? [
-            ...victimsFromIds(tabs, decision.close, cfg, decision.why),
-            ...findVictims(tabs.filter((t) => isBrowserPage(t.url || t.pendingUrl)), cfg, now),
-          ]
-        : findVictims(tabs, cfg, now);
+        ? mergeVictims(
+            victimsFromIds(tabs, decision.close, cfg, decision.why, keep),
+            findVictims(tabs, hard, now, keep),
+          )
+        : findVictims(tabs, cfg, now, keep);
       return reap(victims, cfg, now);
     });
 
@@ -127,7 +143,13 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 chrome.runtime.onStartup.addListener(async () => {
   await clearSeen(); // tab ids from the last session mean nothing now
+  await clearPulse();
   await schedule();
+});
+
+// A background tab whose title, icon or sound changes is "live": it is kept.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (isBackgroundChange(tab, changeInfo)) notePulse(tabId, Date.now());
 });
 
 // Stamp new tabs the moment they open so the history can show when they were open.
