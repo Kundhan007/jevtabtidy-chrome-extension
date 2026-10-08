@@ -85,3 +85,4 @@ button.btn { width: 100%; font: inherit; margin-bottom: 8px; }
 .links a { color: var(--muted); text-decoration: none; }
 .links a:hover { color: var(--accent); }
 #getkey { display: block; margin-top: 8px; text-align: center; font-size: 12px; color: var(--accent); }
+.consent { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); }

@@ -9,7 +9,8 @@
 //   request  { state: {policy, focus, groups}, model, questions: {t<id>: Choice} }
 //   response { answers: {t<id>: {type:"choice", choice, probabilities, confidence}} }
 
-import { clearSession, getToken } from "./license.js";
+import { JEV_URL } from "./config.js";
+import { clearSession, getToken, hasConsent } from "./license.js";
 import { info, warn } from "./log.js";
 import { recentIds, siteOf } from "./keep.js";
 import { NONE, classify, idleMinutes, isBrowserPage, isProtected } from "./rules.js";
@@ -38,6 +39,16 @@ export function candidates(tabs, cfg, now, keep = new Set()) {
     .slice(0, cfg.maxTabsPerCall);
 }
 
+/** Address without credentials, query string or fragment: those often hold tokens and searches. */
+function bareUrl(url) {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return "";
+  }
+}
+
 /** Build the TypeSafe request plus the list of tabs it asks about. */
 export function buildRequest(tabs, groups, now, cfg, keep = new Set()) {
   const asked = candidates(tabs, cfg, now, keep);
@@ -46,7 +57,7 @@ export function buildRequest(tabs, groups, now, cfg, keep = new Set()) {
   const focus = tabs
     .filter((t) => recent.has(t.id) && classify(t, cfg).kind !== "skip")
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))
-    .map((t) => ({ title: t.title || "", url: t.url }));
+    .map((t) => ({ title: t.title || "", url: bareUrl(t.url) }));
 
   const criteria = criteriaFor(cfg);
   const questions = {};
@@ -56,7 +67,7 @@ export function buildRequest(tabs, groups, now, cfg, keep = new Set()) {
       instructions: {
         tab: {
           title: t.title || "",
-          url: t.url,
+          url: bareUrl(t.url),
           idleMinutes: Math.round(idleMinutes(t, now)),
           openedFromAnotherTab: t.openerTabId != null,
         },
@@ -144,22 +155,22 @@ function explainKept(decision, asked, cfg) {
 }
 
 /**
- * Ask Jev what to do. via: "jev" (decision attached), "local" (no decideUrl
- * set), or "fallback" (Jev unusable, reason attached; caller uses local rules).
+ * Ask Jev what to do. via: "jev" (decision attached), "local" (no consent yet), or "fallback" (Jev unusable, reason attached; caller uses local rules).
  * A 401/403 clears the session and retries once after re-checking the key.
  */
 export async function plan(cfg, tabs, groups, now = Date.now(), keep = new Set()) {
-  if (!cfg.decideUrl) return { via: "local" };
+  // Nothing about the user's tabs leaves the browser until they have agreed.
+  if (!(await hasConsent())) return { via: "local" };
   const { request, asked } = buildRequest(tabs, groups, now, cfg, keep);
   info("jev.request", { asked: asked.length, candidates: tabs.length });
   if (asked.length === 0) return { via: "jev", decision: { close: [], groups: [], why: {}, judged: [] }, askedIds: [] };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const token = await getToken(cfg.verifyUrl);
+    const token = await getToken();
     if (!token) return { via: "fallback", reason: "key check failed" };
 
     const sent = Date.now();
-    const res = await decide(cfg.decideUrl, token, request);
+    const res = await decide(JEV_URL, token, request);
     info("jev.response", { result: res.status, ms: Date.now() - sent, attempt: attempt + 1 });
     if (res.status === "ok") {
       const decision = parseDecision(res.data, asked, cfg);

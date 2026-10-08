@@ -4,10 +4,11 @@
 // ponytail: this is an on/off gate, not security. Anyone can edit the extension.
 // Re-verify on a timer if the key can be revoked server-side.
 
-import { JEV_MODEL } from "./config.js";
+import { JEV_MODEL, JEV_URL } from "./config.js";
 
 const STORE_KEY = "license";
 const SESSION_KEY = "session";
+const CONSENT_KEY = "consent";
 const SKEW_MS = 30_000; // refresh a token this long before it expires
 let pending = null; // in-flight handshake shared by concurrent callers
 
@@ -88,30 +89,6 @@ export async function verifyKey(key, url, fetchImpl = fetch, timeoutMs = 8000) {
   }
 }
 
-/** "https://host/*" for the url, or null when it has no usable origin. */
-function originPattern(url) {
-  try {
-    return `${new URL(url).origin}/*`;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Ask Chrome for access to the verify URL's origin. Needs a user gesture, so
- * call it from a click in the options tab (a popup closes on the prompt).
- */
-export async function requestOrigin(...urls) {
-  const origins = urls.map(originPattern).filter(Boolean);
-  if (origins.length === 0) return true;
-  return chrome.permissions.request({ origins });
-}
-
-async function hasOrigin(url) {
-  const origin = originPattern(url);
-  return !origin || chrome.permissions.contains({ origins: [origin] });
-}
-
 export async function getLicense() {
   const stored = await chrome.storage.local.get(STORE_KEY);
   return stored[STORE_KEY] ?? null;
@@ -124,17 +101,9 @@ export async function isActive() {
 }
 
 /** Verify and store the key. Returns the stored license record. */
-export async function activate(rawKey, verifyUrl) {
+export async function activate(rawKey) {
   const key = String(rawKey ?? "").trim();
-  let result;
-  if (verifyUrl && checkFormat(key) && !(await hasOrigin(verifyUrl))) {
-    result = {
-      state: "unreachable",
-      message: "No access to the verify URL yet. Open Settings and Save once to grant it.",
-    };
-  } else {
-    result = await verifyKey(key, verifyUrl);
-  }
+  const result = await verifyKey(key, JEV_URL);
   const license = { key, state: result.state, message: result.message, checkedAt: Date.now() };
   if (ACTIVE_STATES.includes(result.state)) {
     await chrome.storage.local.set({
@@ -149,8 +118,15 @@ export async function activate(rawKey, verifyUrl) {
 }
 
 export async function deactivate() {
-  await chrome.storage.local.remove([STORE_KEY, SESSION_KEY]);
+  await chrome.storage.local.remove([STORE_KEY, SESSION_KEY, CONSENT_KEY]);
 }
+
+/** Has the user agreed to send tab titles and addresses to TypeSafe? */
+export async function hasConsent() {
+  return Boolean((await chrome.storage.local.get(CONSENT_KEY))[CONSENT_KEY]);
+}
+
+export const giveConsent = () => chrome.storage.local.set({ [CONSENT_KEY]: Date.now() });
 
 // ---- session: the token handshake produced, reused by every Jev call ------
 
@@ -172,10 +148,10 @@ export async function clearSession() {
   await chrome.storage.local.remove(SESSION_KEY);
 }
 
-async function refreshSession(verifyUrl) {
+async function refreshSession() {
   const license = await getLicense();
   if (!license?.key) return null;
-  const result = await verifyKey(license.key, verifyUrl);
+  const result = await verifyKey(license.key, JEV_URL);
   if (!ACTIVE_STATES.includes(result.state)) return null;
   const session = toSession(license.key, result);
   await chrome.storage.local.set({ [SESSION_KEY]: session });
@@ -186,10 +162,10 @@ async function refreshSession(verifyUrl) {
  * Token for a Jev call. Cached = no network. Only an expired or cleared
  * session triggers a new handshake, and concurrent callers share one.
  */
-export async function getToken(verifyUrl) {
+export async function getToken() {
   const stored = (await chrome.storage.local.get(SESSION_KEY))[SESSION_KEY];
   if (sessionFresh(stored)) return stored.token;
-  pending ??= refreshSession(verifyUrl).finally(() => {
+  pending ??= refreshSession().finally(() => {
     pending = null;
   });
   return pending;

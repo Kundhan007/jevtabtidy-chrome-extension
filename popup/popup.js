@@ -1,8 +1,7 @@
 // Toolbar panel: enter a key, see whether it verified, run a pass.
 // Activating stores the key; the background worker sees the change and starts.
 
-import { loadConfig } from "../src/brain.js";
-import { activate, deactivate, getLicense, mask } from "../src/license.js";
+import { activate, deactivate, getLicense, giveConsent, hasConsent, mask } from "../src/license.js";
 import { getLog, info, lastError, warn } from "../src/log.js";
 import { getClosedLog, lastBatch, undoLast } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
@@ -58,19 +57,17 @@ function focusGate() {
 
 /** Redraw the whole panel from what is stored. */
 async function render() {
-  const cfg = await loadConfig();
-  let license = await getLicense();
-  // A key saved before a verify URL existed gets its real check now.
-  if (license?.state === "unverified" && cfg.verifyUrl) {
-    license = await activate(license.key, cfg.verifyUrl);
-  }
-  const [cls, running] = LOOK[license?.state] ?? ["", false];
+  const license = await getLicense();
+  const [cls, keyOk] = LOOK[license?.state] ?? ["", false];
+  const consented = await hasConsent();
+  const running = keyOk && consented;
 
   $("gate").hidden = running;
   $("active").hidden = !running;
   $("masked").textContent = mask(license?.key);
 
   if (!license) setState("Enter your key to start Jevtabtidy.", "warn");
+  else if (keyOk && !consented) setState("Agree below to let Jev see your tabs.", "warn");
   else setState(`${license.message} ${checkedLabel(license)}`, cls);
 
   await renderLast();
@@ -81,11 +78,12 @@ async function render() {
 $("activate").addEventListener("click", async () => {
   // Nothing typed: send them to TypeSafe to get a key.
   if (!$("key").value.trim()) return chrome.tabs.create({ url: $("getkey").href });
+  if (!$("consent").checked) return setState("Tick the box to agree first.", "warn");
   busy(true);
   setState("Checking…");
   try {
-    const cfg = await loadConfig();
-    const license = await activate($("key").value, cfg.verifyUrl);
+    const license = await activate($("key").value);
+    if (license.state === "ok") await giveConsent();
     // The key itself is never logged, only how the check ended.
     (license.state === "ok" || license.state === "unverified" ? info : warn)("key.activate", { state: license.state });
     $("key").value = "";

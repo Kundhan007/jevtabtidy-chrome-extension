@@ -20,7 +20,7 @@ import {
   notePulse,
   prunePulse,
 } from "./keep.js";
-import { isActive } from "./license.js";
+import { hasConsent, isActive } from "./license.js";
 import { error as logError, errorData, info, warn } from "./log.js";
 import {
   clearSeen,
@@ -82,7 +82,7 @@ export async function tidy() {
     for (const problem of (await loadBrain()).problems) warn("brain.problem", { problem });
     const pulse = await loadPulse();
     const keep = keepSet(allTabs, cfg, pulse, now);
-    info("pass.start", { tabs: allTabs.length, kept: keep.size, jev: Boolean(cfg.decideUrl) });
+    info("pass.start", { tabs: allTabs.length, kept: keep.size, jev: await hasConsent() });
 
     const planned = await plan(
       cfg,
