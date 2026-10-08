@@ -8,6 +8,8 @@
   --line: #e4e7ef;
 }
 * { box-sizing: border-box; }
+/* display:grid on .card would otherwise override the hidden attribute */
+[hidden] { display: none !important; }
 body {
   font: 13px/1.4 system-ui, sans-serif;
   width: 320px;
