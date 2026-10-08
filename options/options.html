@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TabTidy</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <h1>TabTidy</h1>
+  <p id="status" class="muted">Loading…</p>
+
+  <form id="form">
+    <label><input type="checkbox" id="dryRun" /> Dry run (log only, close nothing)</label>
+    <label>Run every (min) <input type="number" id="intervalMinutes" min="1" /></label>
+    <label>Collapse idle groups after (min) <input type="number" id="collapseAfterMin" min="1" /></label>
+    <label>Close forgotten tabs after (min) <input type="number" id="forgottenAfterMin" min="1" /></label>
+    <label>Close other ungrouped tabs after (min) <input type="number" id="staleAfterMin" min="5" /></label>
+
+    <label>Key verify URL (https, answers 2xx for a valid Bearer key; empty = format check only)
+      <input type="url" id="verifyUrl" placeholder="https://api.example.com/v1/verify" />
+    </label>
+    <label>Work services (JSON: name, color, patterns)
+      <textarea id="services" rows="12" spellcheck="false"></textarea>
+    </label>
+    <label>Forgotten patterns (one per line)
+      <textarea id="forgotten" rows="8" spellcheck="false"></textarea>
+    </label>
+
+    <div class="row">
+      <button type="submit">Save</button>
+      <button type="button" id="reset">Reset defaults</button>
+      <button type="button" id="run">Tidy now</button>
+    </div>
+    <p id="error" class="error"></p>
+  </form>
+
+  <p><a href="../history/history.html" target="_blank">Open full closed-tabs history →</a></p>
+  <h2>Closed tabs <button type="button" id="clearLog">Clear</button></h2>
+  <table>
+    <thead><tr><th>When</th><th>Tab</th><th>Why</th><th></th></tr></thead>
+    <tbody id="log"></tbody>
+  </table>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
