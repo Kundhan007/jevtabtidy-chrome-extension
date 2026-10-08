@@ -30,10 +30,9 @@ export const DEFAULTS = {
   staleAfterMin: 60,
   // Close "forgotten" tabs (search results, remote desktop) idle this long.
   forgottenAfterMin: 15,
-  // Where the key is checked once on Activate (a tiny probe call). Empty = the
-  // key only gets a format check and the panel says it was not verified.
+  // Where the key is checked once on Activate (a tiny probe call).
   verifyUrl: JEV_URL,
-  // Jev's decision endpoint. Empty = the local rules below decide.
+  // Jev's decision endpoint. If it is unreachable the local rules below decide.
   decideUrl: JEV_URL,
   // Plain-language guidance sent to Jev with every decision call. This is how
   // you steer it without listing sites; edit it in Settings.
@@ -123,9 +122,9 @@ export function sanitize(raw = {}) {
     collapseAfterMin: num(raw.collapseAfterMin, d.collapseAfterMin, 1, 1440),
     staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
     forgottenAfterMin: num(raw.forgottenAfterMin, d.forgottenAfterMin, 1, 1440),
-    // Unset = the default URL; an empty string the user saved = switched off.
-    verifyUrl: raw.verifyUrl === undefined ? d.verifyUrl : httpsUrl(raw.verifyUrl),
-    decideUrl: raw.decideUrl === undefined ? d.decideUrl : httpsUrl(raw.decideUrl),
+    // Empty or invalid falls back to the default, so a blank saved box cannot switch Jev off.
+    verifyUrl: httpsUrl(raw.verifyUrl) || d.verifyUrl,
+    decideUrl: httpsUrl(raw.decideUrl) || d.decideUrl,
     policy: String(raw.policy ?? "").trim().slice(0, 2000) || d.policy,
     services: services(raw.services, d.services),
     forgotten: strings(raw.forgotten, d.forgotten),
