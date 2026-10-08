@@ -35,16 +35,24 @@ export function idleMinutes(tab, now) {
   return (now - (tab.lastAccessed ?? now)) / MIN;
 }
 
+/** chrome:// and about: pages (New tab, Extensions, Settings): never worth keeping open. */
+export function isBrowserPage(url) {
+  return /^(chrome|about):/i.test(url || "");
+}
+
 /**
  * Decide what a tab is.
- *   skip      pinned, or not an http(s) page (chrome://, file://, new tab)
+ *   skip      pinned, or some other non-web page (file://, extension pages)
  *   service   matches a configured work service
- *   forgotten matches the "forgotten" list (search results, remote desktop)
+ *   forgotten browser pages, or matches the "forgotten" list (search, remote desktop)
  *   other     everything else
  */
 export function classify(tab, cfg) {
   const url = tab.url || tab.pendingUrl || "";
-  if (tab.pinned || hostPath(url) === "") return { kind: "skip" };
+  if (tab.pinned) return { kind: "skip" };
+  // New tab / Extensions / Settings pages pile up; treat them as forgotten.
+  if (isBrowserPage(url)) return { kind: "forgotten" };
+  if (hostPath(url) === "") return { kind: "skip" };
   const service = serviceFor(url, cfg.services);
   if (service) return { kind: "service", service };
   if (matches(url, cfg.forgotten)) return { kind: "forgotten" };

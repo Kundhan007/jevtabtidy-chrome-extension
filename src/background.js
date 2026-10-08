@@ -12,6 +12,7 @@ import {
 } from "./groups.js";
 import { plan } from "./jev.js";
 import { isActive } from "./license.js";
+import { isBrowserPage } from "./rules.js";
 import {
   clearSeen,
   findVictims,
@@ -83,8 +84,12 @@ export async function tidy() {
 
     status.closed = await step(status, "reap", async () => {
       const tabs = await chrome.tabs.query({});
+      // Jev judges web pages; idle New tab / Extensions pages always use the local rule.
       const victims = decision
-        ? victimsFromIds(tabs, decision.close, cfg, decision.why)
+        ? [
+            ...victimsFromIds(tabs, decision.close, cfg, decision.why),
+            ...findVictims(tabs.filter((t) => isBrowserPage(t.url || t.pendingUrl)), cfg, now),
+          ]
         : findVictims(tabs, cfg, now);
       return reap(victims, cfg, now);
     });

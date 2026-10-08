@@ -11,7 +11,7 @@
 
 import { JEV_MODEL } from "./config.js";
 import { clearSession, getToken } from "./license.js";
-import { NONE, classify, idleMinutes, isProtected } from "./rules.js";
+import { NONE, classify, idleMinutes, isBrowserPage, isProtected } from "./rules.js";
 
 // Broad, fixed buckets so nobody has to list sites. "keep" = no group fits.
 export const CATEGORIES = [
@@ -32,10 +32,14 @@ const CRITERIA = {
   keep: "Keep it, but no group above fits",
 };
 
-/** Ungrouped, unprotected web tabs are the only ones we can act on; ask about the idlest. */
+/**
+ * Ungrouped, unprotected web tabs are the only ones we can act on; ask about the
+ * idlest. Browser pages (New tab, Extensions) are handled by local rules instead.
+ */
 export function candidates(tabs, cfg, now) {
   return tabs
     .filter((t) => t.groupId === NONE && !isProtected(t) && classify(t, cfg).kind !== "skip")
+    .filter((t) => !isBrowserPage(t.url || t.pendingUrl))
     .sort((a, b) => idleMinutes(b, now) - idleMinutes(a, now))
     .slice(0, MAX_TABS);
 }
