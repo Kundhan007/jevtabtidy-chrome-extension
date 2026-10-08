@@ -10,46 +10,56 @@ import {
   titleCompare,
 } from "./rules.js";
 
-/**
- * Pull ungrouped tabs that match a work service into a group named after it.
- * Reuses an existing group with the same title in the same window.
- */
-export async function ensureServiceGroups(tabs, cfg) {
-  const wanted = new Map(); // "windowId|name" -> { windowId, service, tabIds }
+/** Add a tab to the wanted map, one entry per window + group name. */
+function want(wanted, tab, name, color) {
+  const key = `${tab.windowId}|${name}`;
+  if (!wanted.has(key)) wanted.set(key, { windowId: tab.windowId, name, color, tabIds: [] });
+  wanted.get(key).tabIds.push(tab.id);
+}
+
+/** Local rules: ungrouped tabs matching a work service go to that service's group. */
+export function wantedFromRules(tabs, cfg) {
+  const wanted = new Map();
   for (const tab of tabs) {
     // Never steal a tab from a group the user (or we) already placed it in.
     if (tab.groupId !== NONE) continue;
     const c = classify(tab, cfg);
-    if (c.kind !== "service") continue;
-    const key = `${tab.windowId}|${c.service.name}`;
-    if (!wanted.has(key)) {
-      wanted.set(key, { windowId: tab.windowId, service: c.service, tabIds: [] });
-    }
-    wanted.get(key).tabIds.push(tab.id);
+    if (c.kind === "service") want(wanted, tab, c.service.name, c.service.color);
   }
+  return wanted;
+}
 
+/** Jev's group assignments, limited to ungrouped, unpinned tabs. */
+export function wantedFromAssignments(assignments, tabs) {
+  const byId = new Map(tabs.map((t) => [t.id, t]));
+  const wanted = new Map();
+  for (const { name, color, tabIds } of assignments) {
+    for (const id of tabIds) {
+      const tab = byId.get(id);
+      if (tab && tab.groupId === NONE && !tab.pinned) want(wanted, tab, name, color);
+    }
+  }
+  return wanted;
+}
+
+/** Create or fill the wanted groups; reuses a same-title group in the same window. */
+export async function applyWanted(wanted) {
   let moved = 0;
-  for (const { windowId, service, tabIds } of wanted.values()) {
-    const [existing] = await chrome.tabGroups.query({
-      windowId,
-      title: service.name,
-    });
+  for (const { windowId, name, color, tabIds } of wanted.values()) {
+    const [existing] = await chrome.tabGroups.query({ windowId, title: name });
     if (existing) {
       await chrome.tabs.group({ tabIds, groupId: existing.id });
     } else {
-      const groupId = await chrome.tabs.group({
-        tabIds,
-        createProperties: { windowId },
-      });
-      await chrome.tabGroups.update(groupId, {
-        title: service.name,
-        color: service.color,
-        collapsed: false,
-      });
+      const groupId = await chrome.tabs.group({ tabIds, createProperties: { windowId } });
+      await chrome.tabGroups.update(groupId, { title: name, color, collapsed: false });
     }
     moved += tabIds.length;
   }
   return moved;
+}
+
+export async function ensureServiceGroups(tabs, cfg) {
+  return applyWanted(wantedFromRules(tabs, cfg));
 }
 
 /**

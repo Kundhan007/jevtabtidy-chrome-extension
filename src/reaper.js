@@ -41,6 +41,23 @@ export function findVictims(tabs, cfg, now) {
   return victims;
 }
 
+/**
+ * Jev picked these tab ids; keep only the ones that are safe to close.
+ * Same guard as findVictims: ungrouped, not pinned/active/audible, not a
+ * work-service tab, not a non-web page.
+ */
+export function victimsFromIds(tabs, ids, cfg) {
+  const picked = new Set(ids);
+  const victims = [];
+  for (const tab of tabs) {
+    if (!picked.has(tab.id) || tab.groupId !== NONE || isProtected(tab)) continue;
+    const { kind } = classify(tab, cfg);
+    if (kind === "skip" || kind === "service") continue;
+    victims.push({ tab, reason: `jev (${kind})` });
+  }
+  return victims;
+}
+
 /** Append entries to the closed log, keeping only the newest LOG_MAX. */
 async function appendLog(entries) {
   const stored = await chrome.storage.local.get(LOG_KEY);
