@@ -29,7 +29,7 @@ export function clean(data) {
   return out;
 }
 
-/** "21:13:16 INFO  pass.end ms=812 closed=15 dryRun=true" */
+/** "21:13:16 INFO  pass.end ms=812 closed=15 via=jev" */
 export function formatLine(entry) {
   const time = new Date(entry.t).toLocaleTimeString([], { hour12: false });
   const pairs = Object.entries(entry.data).map(([k, v]) => `${k}=${v}`);

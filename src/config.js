@@ -22,8 +22,6 @@ export const DEFAULTS = {
   idleCloseHours: 24,
   // A tab that changed in the background within this window counts as live.
   liveWindowHours: 24,
-  // true = only log what would be closed. Flip to false once the log looks right.
-  dryRun: true,
   // Collapse a group when every tab in it has been idle this long.
   collapseAfterMin: 10,
   // Close ungrouped, unrecognised tabs idle this long.
@@ -118,7 +116,6 @@ export function sanitize(raw = {}) {
     minGroupSize: num(raw.minGroupSize, d.minGroupSize, 1, 50),
     idleCloseHours: num(raw.idleCloseHours, d.idleCloseHours, 1, 720),
     liveWindowHours: num(raw.liveWindowHours, d.liveWindowHours, 1, 168),
-    dryRun: raw.dryRun === undefined ? d.dryRun : Boolean(raw.dryRun),
     collapseAfterMin: num(raw.collapseAfterMin, d.collapseAfterMin, 1, 1440),
     staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
     forgottenAfterMin: num(raw.forgottenAfterMin, d.forgottenAfterMin, 1, 1440),

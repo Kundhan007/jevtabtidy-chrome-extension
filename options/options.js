@@ -20,7 +20,6 @@ const NUMBERS = [
 
 /** Fill the form from a config object. */
 function render(cfg) {
-  $("dryRun").checked = cfg.dryRun;
   for (const key of NUMBERS) $(key).value = cfg[key];
   $("verifyUrl").value = cfg.verifyUrl;
   $("decideUrl").value = cfg.decideUrl;
@@ -31,7 +30,7 @@ function render(cfg) {
 
 /** Read the form back into a raw config; throws on invalid services JSON. */
 function readForm() {
-  const raw = { dryRun: $("dryRun").checked };
+  const raw = {};
   for (const key of NUMBERS) raw[key] = $(key).value;
   raw.verifyUrl = $("verifyUrl").value;
   raw.decideUrl = $("decideUrl").value;
@@ -45,7 +44,7 @@ function showError(message) {
   $("error").textContent = message;
 }
 
-/** "Last run 3:04 PM: grouped 2, closed 1 (dry run), collapsed 0, sorted 1". */
+/** "Last run 3:04 PM: grouped 2, closed 1, collapsed 0, sorted 1". */
 async function renderStatus() {
   const { lastRun } = await chrome.storage.local.get("lastRun");
   $("status").textContent = describeRun(lastRun);
@@ -68,7 +67,7 @@ async function renderLog() {
 
     row.insertCell().textContent = entry.reason;
 
-    // Dry-run entries were never closed, so there is nothing to reopen.
+    // Old dry-run entries were never closed, so there is nothing to reopen.
     const action = row.insertCell();
     if (!entry.dryRun) {
       const button = document.createElement("button");
@@ -84,7 +83,7 @@ $("form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const saved = await saveConfig(readForm());
-    info("settings.saved", { dryRun: saved.dryRun, intervalMin: saved.intervalMinutes, keepRecent: saved.keepRecent });
+    info("settings.saved", { intervalMin: saved.intervalMinutes, keepRecent: saved.keepRecent });
     render(saved);
     // Needs this click: lets the extension call both URLs (one prompt).
     const granted = await requestOrigin(saved.verifyUrl, saved.decideUrl);

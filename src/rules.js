@@ -113,14 +113,13 @@ function via(run) {
   return "Decisions: local rules.";
 }
 
-/** "Last run 3:04 PM: grouped 2, closed 1 (dry run), collapsed 0, sorted 1." */
+/** "Last run 3:04 PM: grouped 2, closed 1, collapsed 0, sorted 1." */
 export function describeRun(run) {
   if (!run) return "No pass has run yet.";
   const when = new Date(run.at).toLocaleTimeString();
-  const mode = run.dryRun ? " (dry run)" : "";
   const err = run.error ? ` ERROR: ${run.error}` : "";
   return (
-    `Last run ${when}: grouped ${run.grouped}, closed ${run.closed}${mode}, ` +
+    `Last run ${when}: grouped ${run.grouped}, closed ${run.closed}, ` +
     `collapsed ${run.collapsed}, sorted ${run.sorted}. ${via(run)}${err}`
   );
 }

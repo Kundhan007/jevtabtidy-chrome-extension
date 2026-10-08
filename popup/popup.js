@@ -1,7 +1,7 @@
 // Toolbar panel: enter a key, see whether it verified, run a pass.
 // Activating stores the key; the background worker sees the change and starts.
 
-import { loadConfig, saveConfig } from "../src/config.js";
+import { loadConfig } from "../src/config.js";
 import { activate, deactivate, getLicense, mask } from "../src/license.js";
 import { getLog, info, lastError, warn } from "../src/log.js";
 import { getClosedLog, lastBatch, undoLast } from "../src/reaper.js";
@@ -34,12 +34,10 @@ async function renderLast() {
 }
 
 /** Label and enable the undo button from the newest real closing pass. */
-async function renderUndo(dryRun) {
+async function renderUndo() {
   const count = lastBatch(await getClosedLog()).length;
   $("undo").disabled = count === 0;
-  // Dry run closes nothing, so say that instead of a bare "Nothing to undo".
-  const none = dryRun ? "Nothing to undo: dry run closes nothing" : "Nothing to undo";
-  $("undo").textContent = count === 0 ? none : `Undo last close (${count})`;
+  $("undo").textContent = count === 0 ? "Nothing to undo" : `Undo last close (${count})`;
 }
 
 /** "Key checked 3:04 PM" so the user can tell the check really happened. */
@@ -66,7 +64,6 @@ async function render() {
   if (license?.state === "unverified" && cfg.verifyUrl) {
     license = await activate(license.key, cfg.verifyUrl);
   }
-  $("dry").hidden = !cfg.dryRun;
   const [cls, running] = LOOK[license?.state] ?? ["", false];
 
   $("gate").hidden = running;
@@ -77,7 +74,7 @@ async function render() {
   else setState(`${license.message} ${checkedLabel(license)}`, cls);
 
   await renderLast();
-  await renderUndo(cfg.dryRun);
+  await renderUndo();
   focusGate();
 }
 
@@ -115,12 +112,6 @@ $("run").addEventListener("click", async () => {
   setState("Running…");
   await chrome.runtime.sendMessage({ type: "tidy-now" });
   busy(false);
-  await render();
-});
-
-$("dryoff").addEventListener("click", async () => {
-  await saveConfig({ ...(await loadConfig()), dryRun: false });
-  info("setting.dryRun", { dryRun: false, via: "popup" });
   await render();
 });
 

@@ -1,6 +1,6 @@
 // History page: nothing but closed URLs, each with the time it was open
 // ("4:00 PM – 5:12 PM") and when it was last used. Newest closed first.
-// Dry-run entries are skipped because those tabs were never closed.
+// Entries from the old dry-run mode are skipped because those tabs were never closed.
 
 import { getClosedLog } from "../src/reaper.js";
 

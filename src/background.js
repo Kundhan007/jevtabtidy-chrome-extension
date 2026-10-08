@@ -50,10 +50,9 @@ async function step(status, name, fn) {
   }
 }
 
-/** Toolbar badge: "DRY" while nothing is really being closed, else empty. */
-async function updateBadge(cfg) {
-  await chrome.action.setBadgeText({ text: cfg.dryRun ? "DRY" : "" });
-  await chrome.action.setBadgeBackgroundColor({ color: "#b26a00" });
+/** Clear the "KEY" badge once a key is active. */
+async function clearBadge() {
+  await chrome.action.setBadgeText({ text: "" });
 }
 
 /** One full pass. Safe to call from anywhere; overlapping calls are dropped. */
@@ -72,8 +71,7 @@ export async function tidy() {
   try {
     const cfg = await loadConfig();
     const now = Date.now();
-    status.dryRun = cfg.dryRun;
-    await updateBadge(cfg);
+    await clearBadge();
     await recordSeen(await chrome.tabs.query({}), now, true);
 
     // One decision call per pass; uses the cached session, no handshake.
@@ -81,7 +79,7 @@ export async function tidy() {
     const allTabs = await chrome.tabs.query({});
     await prunePulse(allTabs);
     const keep = keepSet(allTabs, cfg, await loadPulse(), now);
-    info("pass.start", { tabs: allTabs.length, kept: keep.size, dryRun: cfg.dryRun, jev: Boolean(cfg.decideUrl) });
+    info("pass.start", { tabs: allTabs.length, kept: keep.size, jev: Boolean(cfg.decideUrl) });
 
     const planned = await plan(
       cfg,

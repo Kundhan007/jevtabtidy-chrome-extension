@@ -99,7 +99,7 @@ export async function clearClosedLog() {
   await chrome.storage.local.remove(LOG_KEY);
 }
 
-/** Pure: the entries closed together in the newest real (non-dry, not yet undone) pass. */
+/** Pure: the entries closed together in the newest real (not yet undone; old dry-run entries are skipped) pass. */
 export function lastBatch(log) {
   const live = log.filter((e) => !e.dryRun && !e.undone && e.url);
   return live.length === 0 ? [] : live.filter((e) => e.at === live[0].at);
@@ -144,7 +144,7 @@ export function summarize(victims) {
 }
 
 /**
- * Log every victim, then close them unless cfg.dryRun is set.
+ * Log every victim, then close them.
  * Returns how many tabs were (or would have been) closed.
  */
 export async function reap(victims, cfg, now = Date.now()) {
@@ -159,16 +159,13 @@ export async function reap(victims, cfg, now = Date.now()) {
       title: tab.title || "",
       url: tab.url || "",
       reason,
-      dryRun: cfg.dryRun,
     })),
   );
 
   // One line per tab: host and reason only, never the full URL.
-  const event = cfg.dryRun ? "tab.would_close" : "tab.close";
   for (const { tab, reason } of victims) {
-    info(event, { host: siteOf(tab.url || ""), reason, idleMin: Math.round(idleMinutes(tab, now)) });
+    info("tab.close", { host: siteOf(tab.url || ""), reason, idleMin: Math.round(idleMinutes(tab, now)) });
   }
-  if (cfg.dryRun) return victims.length;
 
   // tabs.remove ignores ids that vanished meanwhile only per call, so remove
   // one at a time and keep going if the user closed a tab first.
