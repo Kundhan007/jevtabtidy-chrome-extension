@@ -1,7 +1,7 @@
 // Toolbar panel: enter a key, see whether it verified, run a pass.
 // Activating stores the key; the background worker sees the change and starts.
 
-import { loadConfig } from "../src/config.js";
+import { loadConfig } from "../src/brain.js";
 import { activate, deactivate, getLicense, mask } from "../src/license.js";
 import { getLog, info, lastError, warn } from "../src/log.js";
 import { getClosedLog, lastBatch, undoLast } from "../src/reaper.js";

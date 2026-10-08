@@ -8,6 +8,11 @@
 <body>
   <h1>Jevtabtidy</h1>
   <p id="status" class="muted">Loading…</p>
+  <p class="muted">
+    Defaults come from <code>brain.yaml</code> in the extension folder (edit it, then reload the extension).
+    Values you change here override the file for those fields only.
+  </p>
+  <p id="brainState" class="muted"></p>
 
   <form id="form">
     <label>Run every (min) <input type="number" id="intervalMinutes" min="5" /></label>
@@ -37,7 +42,7 @@
 
     <div class="row">
       <button type="submit">Save</button>
-      <button type="button" id="reset">Reset defaults</button>
+      <button type="button" id="reset">Reset to brain.yaml</button>
       <button type="button" id="run">Tidy now</button>
     </div>
     <p id="error" class="error"></p>

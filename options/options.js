@@ -1,6 +1,6 @@
 // Options page: edit config, trigger a pass, browse the closed-tab log.
 
-import { loadConfig, resetConfig, saveConfig } from "../src/config.js";
+import { loadBrain, loadConfig, resetConfig, saveConfig } from "../src/brain.js";
 import { requestOrigin } from "../src/license.js";
 import { clearLog, countLevels, filterLevel, formatLog, getLog, info } from "../src/log.js";
 import { clearClosedLog, getClosedLog, reopen } from "../src/reaper.js";
@@ -48,6 +48,15 @@ function showError(message) {
 async function renderStatus() {
   const { lastRun } = await chrome.storage.local.get("lastRun");
   $("status").textContent = describeRun(lastRun);
+}
+
+/** Say whether brain.yaml loaded cleanly, or list what is wrong with it. */
+async function renderBrain() {
+  const { problems } = await loadBrain();
+  const el = $("brainState");
+  el.className = problems.length > 0 ? "muted bad" : "muted";
+  el.textContent =
+    problems.length > 0 ? `brain.yaml problems: ${problems.join("; ")}` : "brain.yaml loaded with no problems.";
 }
 
 async function renderLog() {
@@ -101,7 +110,7 @@ $("reset").addEventListener("click", async () => {
 $("run").addEventListener("click", async () => {
   $("status").textContent = "Running…";
   await chrome.runtime.sendMessage({ type: "tidy-now" });
-  await Promise.all([renderStatus(), renderLog(), renderActivity()]);
+  await Promise.all([renderStatus(), renderLog(), renderActivity(), renderBrain()]);
 });
 
 async function renderActivity() {
@@ -133,4 +142,4 @@ $("clearLog").addEventListener("click", async () => {
 });
 
 render(await loadConfig());
-await Promise.all([renderStatus(), renderLog(), renderActivity()]);
+await Promise.all([renderStatus(), renderLog(), renderActivity(), renderBrain()]);

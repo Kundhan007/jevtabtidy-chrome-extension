@@ -2,7 +2,7 @@
 // Order matters: group -> reap -> collapse -> sort, re-reading tabs between
 // steps because each step changes the tab list.
 
-import { loadConfig } from "./config.js";
+import { loadBrain, loadConfig } from "./brain.js";
 import {
   applyWanted,
   collapseIdle,
@@ -10,7 +10,7 @@ import {
   sortAllWindows,
   wantedFromAssignments,
 } from "./groups.js";
-import { ASK_AFTER_MIN, plan } from "./jev.js";
+import { plan } from "./jev.js";
 import {
   clearPulse,
   describeKept,
@@ -79,6 +79,7 @@ export async function tidy() {
     // Never-touch list: the last N used tabs and tabs that change in the background.
     const allTabs = await chrome.tabs.query({});
     await prunePulse(allTabs);
+    for (const problem of (await loadBrain()).problems) warn("brain.problem", { problem });
     const pulse = await loadPulse();
     const keep = keepSet(allTabs, cfg, pulse, now);
     info("pass.start", { tabs: allTabs.length, kept: keep.size, jev: Boolean(cfg.decideUrl) });
@@ -116,7 +117,7 @@ export async function tidy() {
     });
 
     const tabs = await chrome.tabs.query({});
-    info("pass.kept", describeKept(tabs, cfg, pulse, now, planned.askedIds ?? [], ASK_AFTER_MIN));
+    info("pass.kept", describeKept(tabs, cfg, pulse, now, planned.askedIds ?? [], cfg.askAfterMin));
     status.collapsed = await step(status, "collapse", () =>
       collapseIdle(tabs, cfg, now),
     );
