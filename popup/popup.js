@@ -1,7 +1,7 @@
 // Toolbar panel: enter a key, see whether it verified, run a pass.
 // Activating stores the key; the background worker sees the change and starts.
 
-import { loadConfig } from "../src/config.js";
+import { loadConfig, saveConfig } from "../src/config.js";
 import { activate, deactivate, getLicense, mask } from "../src/license.js";
 import { getClosedLog, lastBatch, undoLast } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
@@ -53,7 +53,13 @@ function focusGate() {
 
 /** Redraw the whole panel from what is stored. */
 async function render() {
-  const license = await getLicense();
+  const cfg = await loadConfig();
+  let license = await getLicense();
+  // A key saved before a verify URL existed gets its real check now.
+  if (license?.state === "unverified" && cfg.verifyUrl) {
+    license = await activate(license.key, cfg.verifyUrl);
+  }
+  $("dry").hidden = !cfg.dryRun;
   const [cls, running] = LOOK[license?.state] ?? ["", false];
 
   $("gate").hidden = running;
@@ -99,6 +105,11 @@ $("run").addEventListener("click", async () => {
   setState("Running…");
   await chrome.runtime.sendMessage({ type: "tidy-now" });
   busy(false);
+  await render();
+});
+
+$("dryoff").addEventListener("click", async () => {
+  await saveConfig({ ...(await loadConfig()), dryRun: false });
   await render();
 });
 
