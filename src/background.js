@@ -3,9 +3,16 @@
 // steps because each step changes the tab list.
 
 import { loadConfig } from "./config.js";
-import { collapseIdle, ensureServiceGroups, sortAllWindows } from "./groups.js";
+import {
+  applyWanted,
+  collapseIdle,
+  ensureServiceGroups,
+  sortAllWindows,
+  wantedFromAssignments,
+} from "./groups.js";
+import { plan } from "./jev.js";
 import { isActive } from "./license.js";
-import { findVictims, reap } from "./reaper.js";
+import { findVictims, reap, victimsFromIds } from "./reaper.js";
 
 const ALARM = "tabtidy";
 const STATUS_KEY = "lastRun";
@@ -50,12 +57,28 @@ export async function tidy() {
     status.dryRun = cfg.dryRun;
     await updateBadge(cfg);
 
-    status.grouped = await step(status, "group", async () =>
-      ensureServiceGroups(await chrome.tabs.query({}), cfg),
-    );
+    // One decision call per pass; uses the cached session, no handshake.
+    const planned = await plan(
+      cfg,
+      await chrome.tabs.query({}),
+      await chrome.tabGroups.query({}),
+      now,
+    ).catch((err) => ({ via: "fallback", reason: err.message }));
+    status.via = planned.via;
+    status.reason = planned.reason;
+    const decision = planned.decision;
+
+    status.grouped = await step(status, "group", async () => {
+      const tabs = await chrome.tabs.query({});
+      if (!decision) return ensureServiceGroups(tabs, cfg);
+      return applyWanted(wantedFromAssignments(decision.groups, tabs));
+    });
 
     status.closed = await step(status, "reap", async () => {
-      const victims = findVictims(await chrome.tabs.query({}), cfg, now);
+      const tabs = await chrome.tabs.query({});
+      const victims = decision
+        ? victimsFromIds(tabs, decision.close, cfg)
+        : findVictims(tabs, cfg, now);
       return reap(victims, cfg, now);
     });
 

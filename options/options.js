@@ -18,6 +18,7 @@ function render(cfg) {
   $("dryRun").checked = cfg.dryRun;
   for (const key of NUMBERS) $(key).value = cfg[key];
   $("verifyUrl").value = cfg.verifyUrl;
+  $("decideUrl").value = cfg.decideUrl;
   $("services").value = JSON.stringify(cfg.services, null, 2);
   $("forgotten").value = cfg.forgotten.join("\n");
 }
@@ -27,6 +28,7 @@ function readForm() {
   const raw = { dryRun: $("dryRun").checked };
   for (const key of NUMBERS) raw[key] = $(key).value;
   raw.verifyUrl = $("verifyUrl").value;
+  raw.decideUrl = $("decideUrl").value;
   raw.services = JSON.parse($("services").value);
   raw.forgotten = $("forgotten").value.split("\n");
   return raw;
@@ -76,9 +78,9 @@ $("form").addEventListener("submit", async (event) => {
   try {
     const saved = await saveConfig(readForm());
     render(saved);
-    // Needs this click: lets the extension call the verify URL.
-    const granted = await requestOrigin(saved.verifyUrl);
-    showError(granted ? "" : "Saved, but access to the verify URL was not granted.");
+    // Needs this click: lets the extension call both URLs (one prompt).
+    const granted = await requestOrigin(saved.verifyUrl, saved.decideUrl);
+    showError(granted ? "" : "Saved, but access to the verify/decision URL was not granted.");
   } catch (err) {
     showError(`Not saved: ${err.message}`);
   }
