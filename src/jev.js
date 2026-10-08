@@ -39,11 +39,22 @@ export function candidates(tabs, cfg, now, keep = new Set()) {
     .slice(0, cfg.maxTabsPerCall);
 }
 
-/** Address without credentials, query string or fragment: those often hold tokens and searches. */
-function bareUrl(url) {
+const SECRET_PARAM = /token|key|auth|secret|pass|sess|sig|code|otp|jwt|bearer/i;
+
+/**
+ * Address for Jev. Search terms and ids in the query (q=, v=) are what tell tabs
+ * apart, so they stay; credentials, the fragment and secret-looking parameters go.
+ */
+export function bareUrl(url) {
   try {
     const u = new URL(url);
-    return `${u.origin}${u.pathname}`;
+    u.username = "";
+    u.password = "";
+    u.hash = "";
+    for (const name of [...u.searchParams.keys()]) {
+      if (SECRET_PARAM.test(name)) u.searchParams.delete(name);
+    }
+    return u.href;
   } catch {
     return "";
   }

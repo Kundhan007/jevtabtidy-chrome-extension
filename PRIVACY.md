@@ -13,8 +13,9 @@ sends to `https://api.typesafe.ai`:
 - the names of your existing tab groups;
 - the plain-language guidance from `brain.yaml`, and your API key as a Bearer token.
 
-Addresses are trimmed to origin and path. The query string, fragment and any
-embedded username or password are removed before sending. Page contents, cookies,
+Before sending, the fragment, any embedded username or password, and query
+parameters whose names look like secrets (token, key, auth, session, code, etc.)
+are removed. Other query parameters, such as search terms, are sent. Page contents, cookies,
 form data and passwords are never read or sent.
 
 Nothing is sent before you agree. Without a key and consent, only local rules run
