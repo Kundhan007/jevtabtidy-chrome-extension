@@ -11,6 +11,7 @@
 
 import { JEV_MODEL } from "./config.js";
 import { clearSession, getToken } from "./license.js";
+import { recentIds } from "./keep.js";
 import { NONE, classify, idleMinutes, isBrowserPage, isProtected } from "./rules.js";
 
 // Broad, fixed buckets so nobody has to list sites. "keep" = no group fits.
@@ -25,6 +26,7 @@ const CLOSE = "close";
 const CLOSE_P = 0.75; // act on "close" only when Jev is at least this sure
 const GROUP_P = 0.6; // and group only at this much confidence
 const MAX_TABS = 40; // questions per call; the most idle tabs go first
+const ASK_AFTER_MIN = 15; // tabs used more recently than this are left alone
 
 const CRITERIA = {
   [CLOSE]: "The user has finished with it or forgot it (stale search, idle remote desktop, one-off lookup)",
@@ -36,19 +38,23 @@ const CRITERIA = {
  * Ungrouped, unprotected web tabs are the only ones we can act on; ask about the
  * idlest. Browser pages (New tab, Extensions) are handled by local rules instead.
  */
-export function candidates(tabs, cfg, now) {
+export function candidates(tabs, cfg, now, keep = new Set()) {
   return tabs
-    .filter((t) => t.groupId === NONE && !isProtected(t) && classify(t, cfg).kind !== "skip")
+    .filter((t) => t.groupId === NONE && !isProtected(t) && !keep.has(t.id))
+    .filter((t) => classify(t, cfg).kind !== "skip" && idleMinutes(t, now) >= ASK_AFTER_MIN)
     .filter((t) => !isBrowserPage(t.url || t.pendingUrl))
     .sort((a, b) => idleMinutes(b, now) - idleMinutes(a, now))
     .slice(0, MAX_TABS);
 }
 
 /** Build the TypeSafe request plus the list of tabs it asks about. */
-export function buildRequest(tabs, groups, now, cfg) {
-  const asked = candidates(tabs, cfg, now);
+export function buildRequest(tabs, groups, now, cfg, keep = new Set()) {
+  const asked = candidates(tabs, cfg, now, keep);
+  // The objective: what the user used most recently. Jev judges relevance against it.
+  const recent = recentIds(tabs, cfg.keepRecent);
   const focus = tabs
-    .filter((t) => t.active && classify(t, cfg).kind !== "skip")
+    .filter((t) => recent.has(t.id) && classify(t, cfg).kind !== "skip")
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))
     .map((t) => ({ title: t.title || "", url: t.url }));
 
   const questions = {};
@@ -77,7 +83,7 @@ const pct = (p) => Math.round(p * 100);
  * Turn Jev's answers into actions. Anything malformed or below the confidence
  * bar is ignored, so a confused answer can only ever mean "do nothing".
  */
-export function parseDecision(data, asked) {
+export function parseDecision(data, asked, minGroup = 1) {
   const close = [];
   const why = {};
   const buckets = new Map(); // category name -> { color, tabIds }
@@ -101,7 +107,10 @@ export function parseDecision(data, asked) {
     buckets.get(category.name).tabIds.push(tab.id);
   }
 
-  const groups = [...buckets].map(([name, { color, tabIds }]) => ({ name, color, tabIds }));
+  // Small groups are clutter: a category needs minGroup tabs before it gets one.
+  const groups = [...buckets]
+    .filter(([, { tabIds }]) => tabIds.length >= minGroup)
+    .map(([name, { color, tabIds }]) => ({ name, color, tabIds }));
   return { close, groups, why };
 }
 
@@ -132,9 +141,9 @@ export async function decide(url, token, body, fetchImpl = fetch, timeoutMs = 20
  * set), or "fallback" (Jev unusable, reason attached; caller uses local rules).
  * A 401/403 clears the session and retries once after re-checking the key.
  */
-export async function plan(cfg, tabs, groups, now = Date.now()) {
+export async function plan(cfg, tabs, groups, now = Date.now(), keep = new Set()) {
   if (!cfg.decideUrl) return { via: "local" };
-  const { request, asked } = buildRequest(tabs, groups, now, cfg);
+  const { request, asked } = buildRequest(tabs, groups, now, cfg, keep);
   if (asked.length === 0) return { via: "jev", decision: { close: [], groups: [], why: {} } };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -142,7 +151,7 @@ export async function plan(cfg, tabs, groups, now = Date.now()) {
     if (!token) return { via: "fallback", reason: "key check failed" };
 
     const res = await decide(cfg.decideUrl, token, request);
-    if (res.status === "ok") return { via: "jev", decision: parseDecision(res.data, asked) };
+    if (res.status === "ok") return { via: "jev", decision: parseDecision(res.data, asked, cfg.minGroupSize) };
     if (res.status === "unauthorized") {
       await clearSession();
       continue;
