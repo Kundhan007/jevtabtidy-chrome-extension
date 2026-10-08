@@ -9,31 +9,21 @@
 //   request  { state: {policy, focus, groups}, model, questions: {t<id>: Choice} }
 //   response { answers: {t<id>: {type:"choice", choice, probabilities, confidence}} }
 
-import { JEV_MODEL } from "./config.js";
 import { clearSession, getToken } from "./license.js";
 import { info, warn } from "./log.js";
 import { recentIds, siteOf } from "./keep.js";
 import { NONE, classify, idleMinutes, isBrowserPage, isProtected } from "./rules.js";
 
-// Broad, fixed buckets so nobody has to list sites. "keep" = no group fits.
-export const CATEGORIES = [
-  { name: "Work", color: "blue", hint: "Issue trackers, code hosting, internal tools, docs for the user's job" },
-  { name: "Reference", color: "grey", hint: "Documentation, articles, Q&A the user may come back to" },
-  { name: "Communication", color: "green", hint: "Email, chat, calendar, meetings" },
-  { name: "Media", color: "pink", hint: "Video, music, social, shopping, news" },
-];
-
 const CLOSE = "close";
-const CLOSE_P = 0.75; // act on "close" only when Jev is at least this sure
-const GROUP_P = 0.6; // and group only at this much confidence
-const MAX_TABS = 40; // questions per call; the most idle tabs go first
-export const ASK_AFTER_MIN = 15; // tabs used more recently than this are left alone
 
-const CRITERIA = {
-  [CLOSE]: "The user has finished with it or forgot it (stale search, idle remote desktop, one-off lookup)",
-  ...Object.fromEntries(CATEGORIES.map((c) => [c.name, `Keep it; belongs in a group for: ${c.hint}`])),
-  keep: "Keep it, but no group above fits",
-};
+/** The choices Jev picks from: close, one per configured category, or keep. */
+function criteriaFor(cfg) {
+  return {
+    [CLOSE]: "The user has finished with it or forgot it (stale search, idle remote desktop, one-off lookup)",
+    ...Object.fromEntries(cfg.categories.map((c) => [c.name, `Keep it; belongs in a group for: ${c.hint}`])),
+    keep: "Keep it, but no group above fits",
+  };
+}
 
 /**
  * Ungrouped, unprotected web tabs are the only ones we can act on; ask about the
@@ -42,10 +32,10 @@ const CRITERIA = {
 export function candidates(tabs, cfg, now, keep = new Set()) {
   return tabs
     .filter((t) => t.groupId === NONE && !isProtected(t) && !keep.has(t.id))
-    .filter((t) => classify(t, cfg).kind !== "skip" && idleMinutes(t, now) >= ASK_AFTER_MIN)
+    .filter((t) => classify(t, cfg).kind !== "skip" && idleMinutes(t, now) >= cfg.askAfterMin)
     .filter((t) => !isBrowserPage(t.url || t.pendingUrl))
     .sort((a, b) => idleMinutes(b, now) - idleMinutes(a, now))
-    .slice(0, MAX_TABS);
+    .slice(0, cfg.maxTabsPerCall);
 }
 
 /** Build the TypeSafe request plus the list of tabs it asks about. */
@@ -58,6 +48,7 @@ export function buildRequest(tabs, groups, now, cfg, keep = new Set()) {
     .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))
     .map((t) => ({ title: t.title || "", url: t.url }));
 
+  const criteria = criteriaFor(cfg);
   const questions = {};
   for (const t of asked) {
     questions[`t${t.id}`] = {
@@ -71,11 +62,11 @@ export function buildRequest(tabs, groups, now, cfg, keep = new Set()) {
         },
         question: "What should happen to `tab`, given the policy and focus in the state?",
       },
-      criteria: CRITERIA,
+      criteria,
     };
   }
   const state = { policy: cfg.policy, focus, existingGroups: groups.map((g) => g.title).filter(Boolean) };
-  return { request: { state, model: JEV_MODEL, questions }, asked };
+  return { request: { state, model: cfg.model, questions }, asked };
 }
 
 const pct = (p) => Math.round(p * 100);
@@ -84,7 +75,7 @@ const pct = (p) => Math.round(p * 100);
  * Turn Jev's answers into actions. Anything malformed or below the confidence
  * bar is ignored, so a confused answer can only ever mean "do nothing".
  */
-export function parseDecision(data, asked, minGroup = 1) {
+export function parseDecision(data, asked, cfg) {
   const close = [];
   const judged = []; // every usable answer, so callers can explain what was kept
   const why = {};
@@ -98,21 +89,21 @@ export function parseDecision(data, asked, minGroup = 1) {
     judged.push({ id: tab.id, choice: answer.choice, p });
 
     if (answer.choice === CLOSE) {
-      if (p >= CLOSE_P) {
+      if (p >= cfg.closeConfidence) {
         close.push(tab.id);
         why[tab.id] = `${pct(p)}% sure it is finished`;
       }
       continue;
     }
-    const category = CATEGORIES.find((c) => c.name === answer.choice);
-    if (!category || p < GROUP_P) continue;
+    const category = cfg.categories.find((c) => c.name === answer.choice);
+    if (!category || p < cfg.groupConfidence) continue;
     if (!buckets.has(category.name)) buckets.set(category.name, { color: category.color, tabIds: [] });
     buckets.get(category.name).tabIds.push(tab.id);
   }
 
-  // Small groups are clutter: a category needs minGroup tabs before it gets one.
+  // Small groups are clutter: a category needs minGroupSize tabs before it gets one.
   const groups = [...buckets]
-    .filter(([, { tabIds }]) => tabIds.length >= minGroup)
+    .filter(([, { tabIds }]) => tabIds.length >= cfg.minGroupSize)
     .map(([name, { color, tabIds }]) => ({ name, color, tabIds }));
   return { close, groups, why, judged };
 }
@@ -140,13 +131,13 @@ export async function decide(url, token, body, fetchImpl = fetch, timeoutMs = 20
 }
 
 /** One line per tab Jev looked at and left open, saying why. */
-function explainKept(decision, asked) {
+function explainKept(decision, asked, cfg) {
   const byId = new Map(asked.map((t) => [t.id, t]));
   for (const { id, choice, p } of decision.judged) {
     if (decision.close.includes(id)) continue;
     const why =
       choice === CLOSE
-        ? `wanted close at ${pct(p)}%, below the ${pct(CLOSE_P)}% bar`
+        ? `wanted close at ${pct(p)}%, below the ${pct(cfg.closeConfidence)}% bar`
         : `Jev says ${choice} (${pct(p)}%)`;
     info("jev.kept", { host: siteOf(byId.get(id)?.url || ""), why });
   }
@@ -171,9 +162,9 @@ export async function plan(cfg, tabs, groups, now = Date.now(), keep = new Set()
     const res = await decide(cfg.decideUrl, token, request);
     info("jev.response", { result: res.status, ms: Date.now() - sent, attempt: attempt + 1 });
     if (res.status === "ok") {
-      const decision = parseDecision(res.data, asked, cfg.minGroupSize);
+      const decision = parseDecision(res.data, asked, cfg);
       info("jev.decision", { close: decision.close.length, groups: decision.groups.length });
-      explainKept(decision, asked);
+      explainKept(decision, asked, cfg);
       return { via: "jev", decision, askedIds: asked.map((t) => t.id) };
     }
     if (res.status === "unauthorized") {
