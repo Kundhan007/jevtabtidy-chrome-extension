@@ -58,7 +58,7 @@ export async function verifyKey(key, url, fetchImpl = fetch, timeoutMs = 8000) {
       const body = await readJson(res);
       return {
         state: "ok",
-        message: "Key verified. TabTidy is running.",
+        message: "Key verified. Jevtabtidy is running.",
         token: body.token ?? body.access_token ?? null,
         expiresIn: Number(body.expires_in) || null,
       };

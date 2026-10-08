@@ -20,7 +20,7 @@ import {
   victimsFromIds,
 } from "./reaper.js";
 
-const ALARM = "tabtidy";
+const ALARM = "jevtabtidy";
 const STATUS_KEY = "lastRun";
 
 // The worker can be woken by an alarm and a click at once; run one pass only.
@@ -35,7 +35,7 @@ async function step(status, name, fn) {
     return await fn();
   } catch (err) {
     status.error = `${name}: ${String(err?.message ?? err)}`;
-    console.error(`tabtidy ${name} failed`, err);
+    console.error(`jevtabtidy ${name} failed`, err);
     return 0;
   }
 }
@@ -97,7 +97,7 @@ export async function tidy() {
   } catch (err) {
     // Config load failed: record it, keep the schedule alive.
     status.error = String(err?.message ?? err);
-    console.error("tabtidy pass failed", err);
+    console.error("jevtabtidy pass failed", err);
   } finally {
     running = false;
     await chrome.storage.local.set({ [STATUS_KEY]: status });

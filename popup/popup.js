@@ -52,7 +52,7 @@ async function render() {
   $("active").hidden = !running;
   $("masked").textContent = mask(license?.key);
 
-  if (!license) setState("Enter your key to start TabTidy.", "warn");
+  if (!license) setState("Enter your key to start Jevtabtidy.", "warn");
   else setState(`${license.message} ${checkedLabel(license)}`, cls);
 
   await renderLast();
