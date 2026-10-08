@@ -20,6 +20,8 @@ export const DEFAULTS = {
   // https URL that answers 2xx for a good key (sent as Bearer). Empty = the key
   // only gets a format check and the panel says it was not verified.
   verifyUrl: "",
+  // https URL of Jev's decision endpoint. Empty = use the local rules below.
+  decideUrl: "",
   // Work services. Matching ungrouped tabs are pulled into a group named after
   // the service. The extension never closes a tab that sits in a group, so
   // these groups never disappear on their own.
@@ -97,6 +99,7 @@ export function sanitize(raw = {}) {
     staleAfterMin: num(raw.staleAfterMin, d.staleAfterMin, 5, 10080),
     forgottenAfterMin: num(raw.forgottenAfterMin, d.forgottenAfterMin, 1, 1440),
     verifyUrl: httpsUrl(raw.verifyUrl),
+    decideUrl: httpsUrl(raw.decideUrl),
     services: services(raw.services, d.services),
     forgotten: strings(raw.forgotten, d.forgotten),
   };

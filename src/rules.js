@@ -98,6 +98,13 @@ export function titleCompare(a, b) {
   return titleKey(a.title).localeCompare(titleKey(b.title));
 }
 
+/** "Decisions: Jev." / "Decisions: local rules (Jev unavailable: timed out)." */
+function via(run) {
+  if (run.via === "jev") return "Decisions: Jev.";
+  if (run.via === "fallback") return `Decisions: local rules (Jev unavailable: ${run.reason}).`;
+  return "Decisions: local rules.";
+}
+
 /** "Last run 3:04 PM: grouped 2, closed 1 (dry run), collapsed 0, sorted 1." */
 export function describeRun(run) {
   if (!run) return "No pass has run yet.";
@@ -106,7 +113,7 @@ export function describeRun(run) {
   const err = run.error ? ` ERROR: ${run.error}` : "";
   return (
     `Last run ${when}: grouped ${run.grouped}, closed ${run.closed}${mode}, ` +
-    `collapsed ${run.collapsed}, sorted ${run.sorted}.${err}`
+    `collapsed ${run.collapsed}, sorted ${run.sorted}. ${via(run)}${err}`
   );
 }
 
