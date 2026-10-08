@@ -12,7 +12,13 @@ import {
 } from "./groups.js";
 import { plan } from "./jev.js";
 import { isActive } from "./license.js";
-import { findVictims, reap, victimsFromIds } from "./reaper.js";
+import {
+  clearSeen,
+  findVictims,
+  reap,
+  recordSeen,
+  victimsFromIds,
+} from "./reaper.js";
 
 const ALARM = "tabtidy";
 const STATUS_KEY = "lastRun";
@@ -56,6 +62,7 @@ export async function tidy() {
     const now = Date.now();
     status.dryRun = cfg.dryRun;
     await updateBadge(cfg);
+    await recordSeen(await chrome.tabs.query({}), now, true);
 
     // One decision call per pass; uses the cached session, no handshake.
     const planned = await plan(
@@ -113,7 +120,15 @@ chrome.runtime.onInstalled.addListener(() => {
   schedule();
   tidy();
 });
-chrome.runtime.onStartup.addListener(schedule);
+chrome.runtime.onStartup.addListener(async () => {
+  await clearSeen(); // tab ids from the last session mean nothing now
+  await schedule();
+});
+
+// Stamp new tabs the moment they open so the history can show when they were open.
+chrome.tabs.onCreated.addListener((tab) => {
+  recordSeen([tab], Date.now());
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM) tidy();

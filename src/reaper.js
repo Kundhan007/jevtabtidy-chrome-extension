@@ -58,6 +58,29 @@ export function victimsFromIds(tabs, ids, cfg, why = {}) {
   return victims;
 }
 
+// Chrome never says when a tab was opened, so we note the first time we see it.
+// Tab ids reset between browser sessions, so this map is cleared on startup.
+const SEEN_KEY = "seen";
+
+/** Pure: tabId -> first-seen time. New ids get `now`; `prune` drops closed ones. */
+export function mergeSeen(seen, tabs, now, prune = false) {
+  const next = prune ? {} : { ...seen };
+  for (const tab of tabs) next[tab.id] = seen[tab.id] ?? now;
+  return next;
+}
+
+async function loadSeen() {
+  return (await chrome.storage.local.get(SEEN_KEY))[SEEN_KEY] ?? {};
+}
+
+export async function recordSeen(tabs, now, prune = false) {
+  await chrome.storage.local.set({ [SEEN_KEY]: mergeSeen(await loadSeen(), tabs, now, prune) });
+}
+
+export async function clearSeen() {
+  await chrome.storage.local.remove(SEEN_KEY);
+}
+
 /** Append entries to the closed log, keeping only the newest LOG_MAX. */
 async function appendLog(entries) {
   const stored = await chrome.storage.local.get(LOG_KEY);
@@ -102,9 +125,12 @@ export function summarize(victims) {
 export async function reap(victims, cfg, now = Date.now()) {
   if (victims.length === 0) return 0;
 
+  const seen = await loadSeen();
   await appendLog(
     victims.map(({ tab, reason }) => ({
       at: now,
+      openedAt: seen[tab.id] ?? null,
+      lastAccessed: tab.lastAccessed ?? null,
       title: tab.title || "",
       url: tab.url || "",
       reason,
