@@ -124,6 +124,16 @@ export function describeRun(run) {
   );
 }
 
+/** Host in bold, path and query on a second muted line (cut by CSS, full URL on hover). */
+export function splitUrl(url) {
+  try {
+    const u = new URL(url);
+    return { host: u.host, path: `${u.pathname}${u.search}${u.hash}`.replace(/^\/$/, "") };
+  } catch {
+    return { host: url, path: "" };
+  }
+}
+
 /** One-line human description used in logs. */
 export function describe(tab, now) {
   const title = (tab.title || "(untitled)").slice(0, 60);

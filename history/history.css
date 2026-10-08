@@ -1,7 +1,71 @@
-body { font: 14px system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-ul { list-style: none; margin: 0; padding: 0; }
-li { padding: 8px 0; border-bottom: 1px solid #e3e3e3; }
-li a { display: block; color: inherit; word-break: break-all; text-decoration: none; }
-li a:hover { text-decoration: underline; }
-.meta { display: block; margin-top: 2px; font-size: 12px; color: #666; }
-.empty { color: #888; border: 0; }
+:root {
+  --bg: #f4f5fa;
+  --card: #ffffff;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --line: #e4e7ef;
+  --accent: #4f46e5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161d;
+    --card: #1d2029;
+    --text: #e6e8f0;
+    --muted: #98a0b3;
+    --line: #2b2f3b;
+    --accent: #8b93ff;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font: 14px/1.4 system-ui, sans-serif;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 28px 16px 48px;
+  color: var(--text);
+  background: var(--bg);
+}
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.row:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0; /* lets the long path shrink with an ellipsis */
+  color: inherit;
+  text-decoration: none;
+}
+.icon { width: 24px; height: 24px; border-radius: 6px; flex: none; background: var(--line); }
+.text { display: grid; min-width: 0; }
+.host { font-weight: 600; }
+.path {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta { display: grid; justify-items: end; gap: 2px; font-size: 12px; color: var(--muted); flex: none; }
+.span { color: var(--text); font-variant-numeric: tabular-nums; }
+.used { font-variant-numeric: tabular-nums; }
+
+.empty { padding: 48px 0; text-align: center; color: var(--muted); }
+
+@media (max-width: 560px) {
+  .row { flex-wrap: wrap; }
+  .meta { justify-items: start; width: 100%; padding-left: 36px; }
+}

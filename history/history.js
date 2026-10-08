@@ -3,6 +3,7 @@
 // Entries from the old dry-run mode are skipped because those tabs were never closed.
 
 import { getClosedLog } from "../src/reaper.js";
+import { splitUrl } from "../src/rules.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,19 +40,44 @@ export function tooltip(entry) {
   ].join("\n");
 }
 
-function itemFor(entry, now) {
-  const item = document.createElement("li");
+/** Chrome's own cached icon for the page (needs the "favicon" permission). */
+function faviconFor(url) {
+  const icon = new URL(chrome.runtime.getURL("/_favicon/"));
+  icon.searchParams.set("pageUrl", url);
+  icon.searchParams.set("size", "32");
+  return icon.href;
+}
 
-  const link = document.createElement("a");
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function itemFor(entry, now) {
+  const { host, path } = splitUrl(entry.url);
+  const item = el("li", "row");
+
+  const link = el("a", "main");
   link.href = entry.url;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
-  link.textContent = entry.url;
+  link.title = entry.url;
 
-  const meta = document.createElement("span");
-  meta.className = "meta";
+  const icon = el("img", "icon");
+  icon.src = faviconFor(entry.url);
+  icon.alt = "";
+  const text = el("span", "text");
+  text.append(el("span", "host", host), el("span", "path", path));
+  link.append(icon, text);
+
+  const meta = el("div", "meta");
   meta.title = tooltip(entry);
-  meta.textContent = `open ${openSpan(entry, now)} · last used ${stamp(entry.lastAccessed, now)}`;
+  meta.append(
+    el("span", "span", openSpan(entry, now)),
+    el("span", "used", `last used ${stamp(entry.lastAccessed, now)}`),
+  );
 
   item.append(link, meta);
   return item;
