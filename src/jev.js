@@ -1,87 +1,115 @@
-// Jev client: one DECISION call per pass, authenticated by the cached session
-// token from license.js. No handshake happens here unless the token expired.
+// Jev client (TypeSafe System One). POST https://api.typesafe.ai/v1/systemone
+// with `Authorization: Bearer <key>`. The key rides on every call; there is no
+// token exchange, so the only "handshake" is the one-time probe in license.js.
 //
-// Assumed contract (change here if Jev differs):
-//   POST decideUrl   Authorization: Bearer <token>
-//   request  { instructions,                       plain-language policy from Settings
-//              focus: [{windowId, title, url}],    the tab(s) the user is on right now
-//              tabs: [{id, windowId, openerTabId, title, url, groupId, idleMin, active, audible}],
-//              groups: [{id, windowId, title}] }
-//   response { close: [tabId], why: {tabId: "reason"},
-//              groups: [{name, color, tabIds: [tabId]}] }
+// Jev does not chat or list things. It answers typed questions, so we ask ONE
+// Choice question per candidate tab: "close", or keep it and name the group
+// that fits. Answers carry probabilities and we act only when Jev is sure.
+//
+//   request  { state: {policy, focus, groups}, model, questions: {t<id>: Choice} }
+//   response { answers: {t<id>: {type:"choice", choice, probabilities, confidence}} }
 
-import { COLORS } from "./config.js";
+import { JEV_MODEL } from "./config.js";
 import { clearSession, getToken } from "./license.js";
-import { NONE, hostPath, idleMinutes } from "./rules.js";
+import { NONE, classify, idleMinutes, isProtected } from "./rules.js";
 
-// Keeps one request small; the most idle tabs are the ones worth deciding on.
-const MAX_TABS = 300;
+// Broad, fixed buckets so nobody has to list sites. "keep" = no group fits.
+export const CATEGORIES = [
+  { name: "Work", color: "blue", hint: "Issue trackers, code hosting, internal tools, docs for the user's job" },
+  { name: "Reference", color: "grey", hint: "Documentation, articles, Q&A the user may come back to" },
+  { name: "Communication", color: "green", hint: "Email, chat, calendar, meetings" },
+  { name: "Media", color: "pink", hint: "Video, music, social, shopping, news" },
+];
 
-/** What Jev sees. Pinned and non-web tabs are left out: they are never touched. */
-export function buildPayload(tabs, groups, now, instructions = "") {
-  const candidates = tabs.filter((t) => !t.pinned && hostPath(t.url || "") !== "");
-  // Stable sort keeps the original order for equally idle tabs.
-  const idleFirst = [...candidates].sort(
-    (a, b) => idleMinutes(b, now) - idleMinutes(a, now),
-  );
-  const kept = new Set(idleFirst.slice(0, MAX_TABS));
-  // What the user is looking at right now: the best clue for "related to current work".
-  const focus = candidates
-    .filter((t) => t.active)
-    .map((t) => ({ windowId: t.windowId, title: t.title || "", url: t.url }));
-  return {
-    instructions,
-    focus,
-    tabs: candidates
-      .filter((t) => kept.has(t))
-      .map((t) => ({
-        id: t.id,
-        windowId: t.windowId,
-        openerTabId: t.openerTabId ?? null,
-        title: t.title || "",
-        url: t.url,
-        groupId: t.groupId ?? NONE,
-        idleMin: Math.round(idleMinutes(t, now)),
-        active: Boolean(t.active),
-        audible: Boolean(t.audible),
-      })),
-    groups: groups.map((g) => ({ id: g.id, windowId: g.windowId, title: g.title || "" })),
-  };
+const CLOSE = "close";
+const CLOSE_P = 0.75; // act on "close" only when Jev is at least this sure
+const GROUP_P = 0.6; // and group only at this much confidence
+const MAX_TABS = 40; // questions per call; the most idle tabs go first
+
+const CRITERIA = {
+  [CLOSE]: "The user has finished with it or forgot it (stale search, idle remote desktop, one-off lookup)",
+  ...Object.fromEntries(CATEGORIES.map((c) => [c.name, `Keep it; belongs in a group for: ${c.hint}`])),
+  keep: "Keep it, but no group above fits",
+};
+
+/** Ungrouped, unprotected web tabs are the only ones we can act on; ask about the idlest. */
+export function candidates(tabs, cfg, now) {
+  return tabs
+    .filter((t) => t.groupId === NONE && !isProtected(t) && classify(t, cfg).kind !== "skip")
+    .sort((a, b) => idleMinutes(b, now) - idleMinutes(a, now))
+    .slice(0, MAX_TABS);
 }
 
-/**
- * Trust nothing from the network: keep only ids we sent, known colors and
- * non-empty names. Anything malformed is dropped, never thrown on.
- */
-export function parseDecision(data, tabs) {
-  const known = new Set(tabs.map((t) => t.id));
-  const ids = (list) => (Array.isArray(list) ? list.filter((id) => known.has(id)) : []);
+/** Build the TypeSafe request plus the list of tabs it asks about. */
+export function buildRequest(tabs, groups, now, cfg) {
+  const asked = candidates(tabs, cfg, now);
+  const focus = tabs
+    .filter((t) => t.active && classify(t, cfg).kind !== "skip")
+    .map((t) => ({ title: t.title || "", url: t.url }));
 
-  const close = [...new Set(ids(data?.close))];
-  const groups = (Array.isArray(data?.groups) ? data.groups : [])
-    .map((g) => ({
-      name: String(g?.name ?? "").trim().slice(0, 40),
-      color: COLORS.includes(g?.color) ? g.color : "grey",
-      tabIds: ids(g?.tabIds),
-    }))
-    .filter((g) => g.name && g.tabIds.length > 0);
-  // Optional per-tab explanation, shown in the closed-tabs history.
-  const why = {};
-  for (const [id, text] of Object.entries(data?.why ?? {})) {
-    if (known.has(Number(id)) && typeof text === "string") why[id] = text.trim().slice(0, 120);
+  const questions = {};
+  for (const t of asked) {
+    questions[`t${t.id}`] = {
+      type: "choice",
+      instructions: {
+        tab: {
+          title: t.title || "",
+          url: t.url,
+          idleMinutes: Math.round(idleMinutes(t, now)),
+          openedFromAnotherTab: t.openerTabId != null,
+        },
+        question: "What should happen to `tab`, given the policy and focus in the state?",
+      },
+      criteria: CRITERIA,
+    };
   }
+  const state = { policy: cfg.policy, focus, existingGroups: groups.map((g) => g.title).filter(Boolean) };
+  return { request: { state, model: JEV_MODEL, questions }, asked };
+}
+
+const pct = (p) => Math.round(p * 100);
+
+/**
+ * Turn Jev's answers into actions. Anything malformed or below the confidence
+ * bar is ignored, so a confused answer can only ever mean "do nothing".
+ */
+export function parseDecision(data, asked) {
+  const close = [];
+  const why = {};
+  const buckets = new Map(); // category name -> { color, tabIds }
+
+  for (const tab of asked) {
+    const answer = data?.answers?.[`t${tab.id}`];
+    if (answer?.type !== "choice" || typeof answer.choice !== "string") continue;
+    const p = Number(answer.probabilities?.[answer.choice] ?? answer.confidence);
+    if (!(p >= 0)) continue;
+
+    if (answer.choice === CLOSE) {
+      if (p >= CLOSE_P) {
+        close.push(tab.id);
+        why[tab.id] = `${pct(p)}% sure it is finished`;
+      }
+      continue;
+    }
+    const category = CATEGORIES.find((c) => c.name === answer.choice);
+    if (!category || p < GROUP_P) continue;
+    if (!buckets.has(category.name)) buckets.set(category.name, { color: category.color, tabIds: [] });
+    buckets.get(category.name).tabIds.push(tab.id);
+  }
+
+  const groups = [...buckets].map(([name, { color, tabIds }]) => ({ name, color, tabIds }));
   return { close, groups, why };
 }
 
 /** The raw POST. Returns {status: ok|unauthorized|error, data?, message?}. */
-export async function decide(url, token, payload, fetchImpl = fetch, timeoutMs = 15000) {
+export async function decide(url, token, body, fetchImpl = fetch, timeoutMs = 20000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (res.status === 401 || res.status === 403) return { status: "unauthorized" };
@@ -98,23 +126,24 @@ export async function decide(url, token, payload, fetchImpl = fetch, timeoutMs =
 /**
  * Ask Jev what to do. via: "jev" (decision attached), "local" (no decideUrl
  * set), or "fallback" (Jev unusable, reason attached; caller uses local rules).
- * A 401/403 clears the session and retries once with a fresh handshake.
+ * A 401/403 clears the session and retries once after re-checking the key.
  */
 export async function plan(cfg, tabs, groups, now = Date.now()) {
   if (!cfg.decideUrl) return { via: "local" };
-  const payload = buildPayload(tabs, groups, now, cfg.policy);
+  const { request, asked } = buildRequest(tabs, groups, now, cfg);
+  if (asked.length === 0) return { via: "jev", decision: { close: [], groups: [], why: {} } };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const token = await getToken(cfg.verifyUrl);
-    if (!token) return { via: "fallback", reason: "handshake failed" };
+    if (!token) return { via: "fallback", reason: "key check failed" };
 
-    const res = await decide(cfg.decideUrl, token, payload);
-    if (res.status === "ok") return { via: "jev", decision: parseDecision(res.data, tabs) };
+    const res = await decide(cfg.decideUrl, token, request);
+    if (res.status === "ok") return { via: "jev", decision: parseDecision(res.data, asked) };
     if (res.status === "unauthorized") {
       await clearSession();
       continue;
     }
     return { via: "fallback", reason: res.message };
   }
-  return { via: "fallback", reason: "session rejected twice" };
+  return { via: "fallback", reason: "key rejected twice" };
 }
