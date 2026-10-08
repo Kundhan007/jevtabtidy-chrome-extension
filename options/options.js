@@ -85,7 +85,7 @@ $("brainRevert").addEventListener("click", async () => {
 });
 
 async function renderLog() {
-  const body = $("log");
+  const body = $("closedRows");
   body.replaceChildren();
   for (const entry of await getClosedLog()) {
     const row = body.insertRow();
