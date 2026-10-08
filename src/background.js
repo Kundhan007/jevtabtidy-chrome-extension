@@ -182,7 +182,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && changes.config) schedule();
+  if ((area === "sync" && changes.config) || (area === "local" && changes.brainText)) schedule();
   // Key entered, verified or removed: start (or stop) straight away.
   if (area === "local" && changes.license) {
     info("license.changed", { state: changes.license.newValue?.state ?? "removed" });

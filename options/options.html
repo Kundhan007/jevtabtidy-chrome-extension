@@ -14,8 +14,12 @@
   </p>
   <p id="brainState" class="muted"></p>
   <details id="brainFile" open>
-    <summary><code>brain.yaml</code> (read-only; edit the file, then reload the extension)</summary>
-    <textarea id="brainText" rows="24" readonly spellcheck="false"></textarea>
+    <summary><code>brain.yaml</code> (edit here, or edit the file and reload the extension)</summary>
+    <textarea id="brainText" rows="24" spellcheck="false"></textarea>
+    <div class="row">
+      <button type="button" id="brainSave">Save YAML</button>
+      <button type="button" id="brainRevert">Revert to file</button>
+    </div>
   </details>
 
   <form id="form">

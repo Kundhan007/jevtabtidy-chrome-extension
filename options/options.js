@@ -1,6 +1,6 @@
 // Options page: edit config, trigger a pass, browse the closed-tab log.
 
-import { loadBrain, loadConfig, resetConfig, saveConfig } from "../src/brain.js";
+import { brainText, loadBrain, loadConfig, resetConfig, revertBrainText, saveBrainText, saveConfig } from "../src/brain.js";
 import { requestOrigin } from "../src/license.js";
 import { clearLog, countLevels, filterLevel, formatLog, getLog, info } from "../src/log.js";
 import { clearClosedLog, getClosedLog, reopen } from "../src/reaper.js";
@@ -60,9 +60,34 @@ async function renderBrain() {
 }
 
 async function renderBrainText() {
-  const res = await fetch(chrome.runtime.getURL("brain.yaml"));
-  $("brainText").value = res.ok ? await res.text() : `could not read brain.yaml (HTTP ${res.status})`;
+  try {
+    $("brainText").value = await brainText();
+  } catch (err) {
+    $("brainText").value = `could not read brain.yaml: ${err.message}`;
+  }
 }
+
+async function refreshAll() {
+  render(await loadConfig());
+  await Promise.all([renderBrain(), renderBrainText()]);
+}
+
+$("brainSave").addEventListener("click", async () => {
+  try {
+    const warnings = await saveBrainText($("brainText").value);
+    info("brain.saved", { warnings: warnings.length });
+    await refreshAll();
+    showError(warnings.length > 0 ? `Saved with warnings: ${warnings.join("; ")}` : "brain.yaml saved.");
+  } catch (err) {
+    showError(`Not saved: ${err.message}`);
+  }
+});
+
+$("brainRevert").addEventListener("click", async () => {
+  await revertBrainText();
+  await refreshAll();
+  showError("Reverted to the brain.yaml file.");
+});
 
 async function renderLog() {
   const body = $("log");

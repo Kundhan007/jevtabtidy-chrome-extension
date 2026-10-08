@@ -13,7 +13,8 @@ import { load } from "./vendor/js-yaml.mjs";
 const STORE_KEY = "config";
 const BRAIN_FILE = "brain.yaml";
 
-let cached = null; // one read of the file per page / worker lifetime
+const TEXT_KEY = "brainText"; // YAML saved from the Settings page; replaces the file's text
+let fileText = null; // one read of the file per page / worker lifetime
 
 /** Plain-language problems with a parsed brain.yaml. Empty list = fine. */
 export function brainProblems(raw) {
@@ -60,28 +61,46 @@ export function parseBrain(text) {
     raw = load(text) ?? {};
   } catch (err) {
     const line = err.mark ? ` (line ${err.mark.line + 1})` : "";
-    return { raw: {}, problems: [`${BRAIN_FILE} is not valid YAML: ${err.reason ?? err.message}${line}`] };
+    return { raw: {}, fatal: true, problems: [`${BRAIN_FILE} is not valid YAML: ${err.reason ?? err.message}${line}`] };
   }
   if (typeof raw !== "object" || Array.isArray(raw)) {
-    return { raw: {}, problems: [`${BRAIN_FILE} must be a mapping of "setting: value" lines`] };
+    return { raw: {}, fatal: true, problems: [`${BRAIN_FILE} must be a mapping of "setting: value" lines`] };
   }
   return { raw, problems: brainProblems(raw) };
 }
 
-async function readBrainFile() {
-  try {
-    const res = await fetch(chrome.runtime.getURL(BRAIN_FILE));
+/** The YAML in force: the copy saved in Settings if there is one, else the file. */
+export async function brainText() {
+  const saved = (await chrome.storage.local.get(TEXT_KEY))[TEXT_KEY];
+  if (typeof saved === "string") return saved;
+  fileText ??= fetch(chrome.runtime.getURL(BRAIN_FILE)).then((res) => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return parseBrain(await res.text());
+    return res.text();
+  });
+  return fileText;
+}
+
+/** The parsed brain.yaml: {raw, problems}. */
+export async function loadBrain() {
+  try {
+    return parseBrain(await brainText());
   } catch (err) {
+    fileText = null;
     return { raw: {}, problems: [`could not read ${BRAIN_FILE}: ${err.message}`] };
   }
 }
 
-/** The parsed brain.yaml (cached): {raw, problems}. */
-export function loadBrain() {
-  cached ??= readBrainFile();
-  return cached;
+/** Save edited YAML from Settings. Refuses text that does not parse; warnings are returned. */
+export async function saveBrainText(text) {
+  const parsed = parseBrain(text);
+  if (parsed.fatal) throw new Error(parsed.problems.join("; "));
+  await chrome.storage.local.set({ [TEXT_KEY]: text });
+  return parsed.problems;
+}
+
+/** Drop the Settings copy so the file in the extension folder applies again. */
+export async function revertBrainText() {
+  await chrome.storage.local.remove(TEXT_KEY);
 }
 
 /** Fields of `full` that differ from `base`: the only thing worth storing. */
