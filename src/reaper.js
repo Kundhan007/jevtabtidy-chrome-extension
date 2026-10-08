@@ -10,7 +10,7 @@ import {
 } from "./rules.js";
 
 const LOG_KEY = "closedLog";
-const LOG_MAX = 200;
+const LOG_MAX = 100;
 
 /**
  * Pure: pick the tabs that should be closed.
