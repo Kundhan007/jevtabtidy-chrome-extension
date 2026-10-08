@@ -29,10 +29,12 @@ async function renderLast() {
 }
 
 /** Label and enable the undo button from the newest real closing pass. */
-async function renderUndo() {
+async function renderUndo(dryRun) {
   const count = lastBatch(await getClosedLog()).length;
   $("undo").disabled = count === 0;
-  $("undo").textContent = count === 0 ? "Nothing to undo" : `Undo last close (${count})`;
+  // Dry run closes nothing, so say that instead of a bare "Nothing to undo".
+  const none = dryRun ? "Nothing to undo: dry run closes nothing" : "Nothing to undo";
+  $("undo").textContent = count === 0 ? none : `Undo last close (${count})`;
 }
 
 /** "Key checked 3:04 PM" so the user can tell the check really happened. */
@@ -70,7 +72,7 @@ async function render() {
   else setState(`${license.message} ${checkedLabel(license)}`, cls);
 
   await renderLast();
-  await renderUndo();
+  await renderUndo(cfg.dryRun);
   focusGate();
 }
 
