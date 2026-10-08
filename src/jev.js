@@ -3,9 +3,12 @@
 //
 // Assumed contract (change here if Jev differs):
 //   POST decideUrl   Authorization: Bearer <token>
-//   request  { tabs: [{id, windowId, title, url, groupId, idleMin, active, audible}],
+//   request  { instructions,                       plain-language policy from Settings
+//              focus: [{windowId, title, url}],    the tab(s) the user is on right now
+//              tabs: [{id, windowId, openerTabId, title, url, groupId, idleMin, active, audible}],
 //              groups: [{id, windowId, title}] }
-//   response { close: [tabId], groups: [{name, color, tabIds: [tabId]}] }
+//   response { close: [tabId], why: {tabId: "reason"},
+//              groups: [{name, color, tabIds: [tabId]}] }
 
 import { COLORS } from "./config.js";
 import { clearSession, getToken } from "./license.js";
@@ -15,19 +18,26 @@ import { NONE, hostPath, idleMinutes } from "./rules.js";
 const MAX_TABS = 300;
 
 /** What Jev sees. Pinned and non-web tabs are left out: they are never touched. */
-export function buildPayload(tabs, groups, now) {
+export function buildPayload(tabs, groups, now, instructions = "") {
   const candidates = tabs.filter((t) => !t.pinned && hostPath(t.url || "") !== "");
   // Stable sort keeps the original order for equally idle tabs.
   const idleFirst = [...candidates].sort(
     (a, b) => idleMinutes(b, now) - idleMinutes(a, now),
   );
   const kept = new Set(idleFirst.slice(0, MAX_TABS));
+  // What the user is looking at right now: the best clue for "related to current work".
+  const focus = candidates
+    .filter((t) => t.active)
+    .map((t) => ({ windowId: t.windowId, title: t.title || "", url: t.url }));
   return {
+    instructions,
+    focus,
     tabs: candidates
       .filter((t) => kept.has(t))
       .map((t) => ({
         id: t.id,
         windowId: t.windowId,
+        openerTabId: t.openerTabId ?? null,
         title: t.title || "",
         url: t.url,
         groupId: t.groupId ?? NONE,
@@ -55,7 +65,12 @@ export function parseDecision(data, tabs) {
       tabIds: ids(g?.tabIds),
     }))
     .filter((g) => g.name && g.tabIds.length > 0);
-  return { close, groups };
+  // Optional per-tab explanation, shown in the closed-tabs history.
+  const why = {};
+  for (const [id, text] of Object.entries(data?.why ?? {})) {
+    if (known.has(Number(id)) && typeof text === "string") why[id] = text.trim().slice(0, 120);
+  }
+  return { close, groups, why };
 }
 
 /** The raw POST. Returns {status: ok|unauthorized|error, data?, message?}. */
@@ -87,7 +102,7 @@ export async function decide(url, token, payload, fetchImpl = fetch, timeoutMs =
  */
 export async function plan(cfg, tabs, groups, now = Date.now()) {
   if (!cfg.decideUrl) return { via: "local" };
-  const payload = buildPayload(tabs, groups, now);
+  const payload = buildPayload(tabs, groups, now, cfg.policy);
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const token = await getToken(cfg.verifyUrl);
