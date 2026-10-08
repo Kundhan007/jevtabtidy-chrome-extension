@@ -79,6 +79,8 @@ async function render() {
 }
 
 $("activate").addEventListener("click", async () => {
+  // Nothing typed: send them to TypeSafe to get a key.
+  if (!$("key").value.trim()) return chrome.tabs.create({ url: $("getkey").href });
   busy(true);
   setState("Checking…");
   try {
