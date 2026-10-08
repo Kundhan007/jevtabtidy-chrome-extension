@@ -1,0 +1,105 @@
+# Jevtabtidy brain: every setting that decides which tabs are kept, grouped or closed.
+#
+# HOW TO CHANGE THE BEHAVIOUR (for people and coding agents)
+#   1. Edit values in this file. Keep every key; change values, not names.
+#   2. Run `npm test` in this folder. It parses this file and fails with a plain
+#      sentence for every problem (unknown key, wrong type, value out of range).
+#   3. Reload the extension at chrome://extensions (the reload arrow on Jevtabtidy).
+#   4. Open Settings -> Activity log. `brain.problem` lines repeat anything wrong
+#      here, `pass.start` / `pass.kept` / `tab.close` lines show what it did.
+# Values changed by hand on the Settings page override this file for those fields
+# only; "Reset to brain.yaml" on that page removes every override.
+#
+# Safety rules that are NOT configurable, on purpose: tabs that are pinned, in a
+# tab group, playing sound, or among the most recently used are never closed.
+
+# ---- Rhythm ---------------------------------------------------------------
+# Minutes between passes (5-120). Low priority housekeeping: 15 is plenty.
+intervalMinutes: 15
+
+# ---- What is never closed -------------------------------------------------
+# The N most recently used tabs (any window) are never closed. 1-50.
+keepRecent: 5
+# A tab whose title, icon or sound changed in the background within this many
+# hours counts as "live" (Gmail unread count, WhatsApp, a playing video) and is
+# kept. If several tabs of one site are live, only the most recently used stays.
+liveWindowHours: 24
+
+# ---- When tabs close without asking ---------------------------------------
+# With Jev on: ungrouped tabs untouched this many hours close with no question.
+idleCloseHours: 24
+# Minutes of idleness before a "forgotten" page (list below) closes.
+forgottenAfterMin: 15
+# Local fallback only (Jev off or unreachable): other ungrouped tabs close after this.
+staleAfterMin: 60
+# Collapse a tab group when every tab in it has been idle this many minutes.
+collapseAfterMin: 10
+
+# ---- Jev (TypeSafe System One) --------------------------------------------
+# Jev is asked about ungrouped tabs idle at least this many minutes.
+askAfterMin: 15
+# Most tabs sent per call; the idlest go first. 1-200.
+maxTabsPerCall: 40
+# Jev must be at least this sure (0.5-1.0) before acting on its answer.
+closeConfidence: 0.75
+groupConfidence: 0.6
+# A kept tab joins a group only when this many tabs share its category.
+minGroupSize: 5
+model: jev-latest
+# Both default to TypeSafe. The key is checked once when you press Activate.
+verifyUrl: https://api.typesafe.ai/v1/systemone
+decideUrl: https://api.typesafe.ai/v1/systemone
+
+# Plain-language guidance sent with every decision. This is the main steering
+# wheel: describe what you do and what you are done with, no site lists needed.
+policy: >-
+  Close tabs the user has clearly finished with or forgot: stale search
+  results, idle remote-desktop pages, one-off lookups. Keep anything related
+  to the user's most recent tabs (see focus) and reference material they
+  are likely to return to. When unsure, keep the tab.
+
+# Buckets Jev sorts kept tabs into. `hint` tells it what belongs. Allowed colors:
+# grey, blue, red, yellow, green, pink, purple, cyan, orange. The names "close"
+# and "keep" are reserved. `categories: []` means Jev only closes or keeps.
+categories:
+  - name: Work
+    color: blue
+    hint: Issue trackers, code hosting, internal tools, docs for the user's job
+  - name: Reference
+    color: grey
+    hint: Documentation, articles, Q&A the user may come back to
+  - name: Communication
+    color: green
+    hint: Email, chat, calendar, meetings
+  - name: Media
+    color: pink
+    hint: Video, music, social, shopping, news
+
+# ---- Local fallback rules (used only when Jev is off or unreachable) ------
+# Ungrouped tabs matching a pattern are pulled into a group with that name.
+# Patterns are substrings of "hostname + path" (e.g. "github.com", "jira.").
+services:
+  - name: Bitbucket
+    color: cyan
+    patterns: [bitbucket.org]
+  - name: Confluence
+    color: purple
+    patterns: [atlassian.net/wiki, confluence.]
+  - name: GitHub
+    color: grey
+    patterns: [github.com]
+  - name: Jira
+    color: blue
+    patterns: [atlassian.net/jira, atlassian.net/browse, jira.]
+
+# Pages people forget to close; they close after `forgottenAfterMin` idle.
+# Browser pages (New tab, Extensions, Settings) are always treated this way.
+forgotten:
+  - google.com/search
+  - bing.com/search
+  - duckduckgo.com
+  - search.brave.com
+  - remotedesktop.google.com
+  - anydesk.com
+  - teamviewer.com
+  - rdweb
