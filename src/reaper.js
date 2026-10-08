@@ -1,13 +1,9 @@
 // Reaper: decides which tabs to close and records every closure.
 // Only ever touches UNGROUPED tabs, so work groups are never emptied.
 
-import {
-  NONE,
-  classify,
-  describe,
-  idleMinutes,
-  isProtected,
-} from "./rules.js";
+import { siteOf } from "./keep.js";
+import { info, warn } from "./log.js";
+import { NONE, classify, idleMinutes, isProtected } from "./rules.js";
 
 const LOG_KEY = "closedLog";
 const LOG_MAX = 100;
@@ -122,6 +118,7 @@ export async function undoLast() {
     entry.undone = true;
   }
   if (batch.length > 0) await chrome.storage.local.set({ [LOG_KEY]: log });
+  info("undo", { reopened: batch.length });
   return batch.length;
 }
 
@@ -166,10 +163,12 @@ export async function reap(victims, cfg, now = Date.now()) {
     })),
   );
 
-  if (cfg.dryRun) {
-    for (const { tab } of victims) console.log("[dry-run] would close", describe(tab, now));
-    return victims.length;
+  // One line per tab: host and reason only, never the full URL.
+  const event = cfg.dryRun ? "tab.would_close" : "tab.close";
+  for (const { tab, reason } of victims) {
+    info(event, { host: siteOf(tab.url || ""), reason, idleMin: Math.round(idleMinutes(tab, now)) });
   }
+  if (cfg.dryRun) return victims.length;
 
   // tabs.remove ignores ids that vanished meanwhile only per call, so remove
   // one at a time and keep going if the user closed a tab first.
@@ -179,7 +178,7 @@ export async function reap(victims, cfg, now = Date.now()) {
       await chrome.tabs.remove(tab.id);
       closed += 1;
     } catch {
-      // Tab already gone.
+      warn("tab.close_failed", { host: siteOf(tab.url || ""), why: "tab already gone" });
     }
   }
   return closed;

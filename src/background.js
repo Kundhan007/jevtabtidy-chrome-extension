@@ -20,6 +20,7 @@ import {
   prunePulse,
 } from "./keep.js";
 import { isActive } from "./license.js";
+import { error as logError, errorData, info, warn } from "./log.js";
 import {
   clearSeen,
   findVictims,
@@ -44,7 +45,7 @@ async function step(status, name, fn) {
     return await fn();
   } catch (err) {
     status.error = `${name}: ${String(err?.message ?? err)}`;
-    console.error(`jevtabtidy ${name} failed`, err);
+    logError("step.failed", { step: name, ...errorData(err) });
     return 0;
   }
 }
@@ -60,12 +61,14 @@ export async function tidy() {
   if (running) return null;
   // No verified key = do nothing; the badge tells the user why.
   if (!(await isActive())) {
+    warn("pass.skipped", { reason: "no active key" });
     await chrome.action.setBadgeText({ text: "KEY" });
     await chrome.action.setBadgeBackgroundColor({ color: "#b00020" });
     return null;
   }
   running = true;
-  const status = { at: Date.now(), grouped: 0, closed: 0, collapsed: 0, sorted: 0 };
+  const started = Date.now();
+  const status = { at: started, grouped: 0, closed: 0, collapsed: 0, sorted: 0 };
   try {
     const cfg = await loadConfig();
     const now = Date.now();
@@ -78,6 +81,7 @@ export async function tidy() {
     const allTabs = await chrome.tabs.query({});
     await prunePulse(allTabs);
     const keep = keepSet(allTabs, cfg, await loadPulse(), now);
+    info("pass.start", { tabs: allTabs.length, kept: keep.size, dryRun: cfg.dryRun, jev: Boolean(cfg.decideUrl) });
 
     const planned = await plan(
       cfg,
@@ -88,6 +92,7 @@ export async function tidy() {
     ).catch((err) => ({ via: "fallback", reason: err.message }));
     status.via = planned.via;
     status.reason = planned.reason;
+    info("pass.decisions", { via: planned.via, reason: planned.reason ?? "" });
     const decision = planned.decision;
 
     status.grouped = await step(status, "group", async () => {
@@ -118,9 +123,11 @@ export async function tidy() {
   } catch (err) {
     // Config load failed: record it, keep the schedule alive.
     status.error = String(err?.message ?? err);
-    console.error("jevtabtidy pass failed", err);
+    logError("pass.failed", errorData(err));
   } finally {
     running = false;
+    const { at, ...counts } = status;
+    info("pass.end", { ms: Date.now() - started, ...counts });
     await chrome.storage.local.set({ [STATUS_KEY]: status });
   }
   return status;
@@ -138,10 +145,12 @@ async function schedule() {
 
 // On install also run once, which shows the "KEY" badge until a key is entered.
 chrome.runtime.onInstalled.addListener(() => {
+  info("extension.installed");
   schedule();
   tidy();
 });
 chrome.runtime.onStartup.addListener(async () => {
+  info("browser.startup");
   await clearSeen(); // tab ids from the last session mean nothing now
   await clearPulse();
   await schedule();
@@ -173,5 +182,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "sync" && changes.config) schedule();
   // Key entered, verified or removed: start (or stop) straight away.
-  if (area === "local" && changes.license) tidy();
+  if (area === "local" && changes.license) {
+    info("license.changed", { state: changes.license.newValue?.state ?? "removed" });
+    tidy();
+  }
 });

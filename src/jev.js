@@ -11,6 +11,7 @@
 
 import { JEV_MODEL } from "./config.js";
 import { clearSession, getToken } from "./license.js";
+import { info, warn } from "./log.js";
 import { recentIds } from "./keep.js";
 import { NONE, classify, idleMinutes, isBrowserPage, isProtected } from "./rules.js";
 
@@ -144,18 +145,27 @@ export async function decide(url, token, body, fetchImpl = fetch, timeoutMs = 20
 export async function plan(cfg, tabs, groups, now = Date.now(), keep = new Set()) {
   if (!cfg.decideUrl) return { via: "local" };
   const { request, asked } = buildRequest(tabs, groups, now, cfg, keep);
+  info("jev.request", { asked: asked.length, candidates: tabs.length });
   if (asked.length === 0) return { via: "jev", decision: { close: [], groups: [], why: {} } };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const token = await getToken(cfg.verifyUrl);
     if (!token) return { via: "fallback", reason: "key check failed" };
 
+    const sent = Date.now();
     const res = await decide(cfg.decideUrl, token, request);
-    if (res.status === "ok") return { via: "jev", decision: parseDecision(res.data, asked, cfg.minGroupSize) };
+    info("jev.response", { result: res.status, ms: Date.now() - sent, attempt: attempt + 1 });
+    if (res.status === "ok") {
+      const decision = parseDecision(res.data, asked, cfg.minGroupSize);
+      info("jev.decision", { close: decision.close.length, groups: decision.groups.length });
+      return { via: "jev", decision };
+    }
     if (res.status === "unauthorized") {
+      warn("jev.unauthorized", { action: "clearing session and retrying once" });
       await clearSession();
       continue;
     }
+    warn("jev.error", { message: res.message });
     return { via: "fallback", reason: res.message };
   }
   return { via: "fallback", reason: "key rejected twice" };
