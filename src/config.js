@@ -22,7 +22,16 @@ export const DEFAULTS = {
   verifyUrl: "",
   // https URL of Jev's decision endpoint. Empty = use the local rules below.
   decideUrl: "",
-  // Work services. Matching ungrouped tabs are pulled into a group named after
+  // Plain-language guidance sent to Jev with every decision call. This is how
+  // you steer it without listing sites; edit it in Settings.
+  policy:
+    "Close tabs the user has clearly finished with or forgot: stale search " +
+    "results, idle remote-desktop pages, one-off lookups. Keep anything related " +
+    "to what the user is working on now (see focus) and reference material they " +
+    "are likely to return to. Group related work tabs under a short descriptive " +
+    "name, for example a Jira board with its tickets and repositories. Give a " +
+    "one-line reason for every tab you close. When unsure, keep the tab.",
+  // Local fallback rules (used only when Jev is off or unreachable). Matching ungrouped tabs are pulled into a group named after
   // the service. The extension never closes a tab that sits in a group, so
   // these groups never disappear on their own.
   services: [
@@ -100,6 +109,7 @@ export function sanitize(raw = {}) {
     forgottenAfterMin: num(raw.forgottenAfterMin, d.forgottenAfterMin, 1, 1440),
     verifyUrl: httpsUrl(raw.verifyUrl),
     decideUrl: httpsUrl(raw.decideUrl),
+    policy: String(raw.policy ?? "").trim().slice(0, 2000) || d.policy,
     services: services(raw.services, d.services),
     forgotten: strings(raw.forgotten, d.forgotten),
   };

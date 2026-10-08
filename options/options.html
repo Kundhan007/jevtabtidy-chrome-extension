@@ -22,7 +22,10 @@
     <label>Jev decision URL (https; empty = local rules decide)
       <input type="url" id="decideUrl" placeholder="https://jev.example.com/v1/decide" />
     </label>
-    <label>Work services (JSON: name, color, patterns)
+    <label>Guidance for Jev (plain language: what to keep, close and group)
+      <textarea id="policy" rows="6"></textarea>
+    </label>
+    <label>Fallback rules, used only if Jev is off or unreachable: work services (JSON: name, color, patterns)
       <textarea id="services" rows="12" spellcheck="false"></textarea>
     </label>
     <label>Forgotten patterns (one per line)

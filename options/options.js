@@ -19,6 +19,7 @@ function render(cfg) {
   for (const key of NUMBERS) $(key).value = cfg[key];
   $("verifyUrl").value = cfg.verifyUrl;
   $("decideUrl").value = cfg.decideUrl;
+  $("policy").value = cfg.policy;
   $("services").value = JSON.stringify(cfg.services, null, 2);
   $("forgotten").value = cfg.forgotten.join("\n");
 }
@@ -29,6 +30,7 @@ function readForm() {
   for (const key of NUMBERS) raw[key] = $(key).value;
   raw.verifyUrl = $("verifyUrl").value;
   raw.decideUrl = $("decideUrl").value;
+  raw.policy = $("policy").value;
   raw.services = JSON.parse($("services").value);
   raw.forgotten = $("forgotten").value.split("\n");
   return raw;
