@@ -9,3 +9,14 @@ button { cursor: pointer; }
 .state.bad { color: #b00020; }
 .muted { color: #666; font-size: 12px; }
 .links { margin-bottom: 0; }
+.btn {
+  display: block;
+  text-align: center;
+  padding: 6px 8px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+  background: #f3f3f3;
+}
+.btn:hover { background: #e6e6e6; }
