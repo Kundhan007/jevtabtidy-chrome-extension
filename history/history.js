@@ -1,156 +1,88 @@
-// History page: every tab TabTidy closed (or would have, in dry run), by day.
-// Reads the same closedLog the reaper writes; nothing is stored here.
+// History page: nothing but closed URLs, each with the time it was open
+// ("4:00 PM – 5:12 PM") and when it was last used. Newest closed first.
+// Dry-run entries are skipped because those tabs were never closed.
 
-import { clearClosedLog, getClosedLog, reopen } from "../src/reaper.js";
+import { getClosedLog } from "../src/reaper.js";
 
 const $ = (id) => document.getElementById(id);
 
-let entries = [];
-
-/** "Thursday, Oct 8, 2026" – one heading per calendar day. */
-function dayLabel(at) {
-  return new Date(at).toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function sameDay(a, b) {
+  return new Date(a).toDateString() === new Date(b).toDateString();
 }
 
-function timeLabel(at) {
-  return new Date(at).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+/** "4:00 PM" for today, "Oct 7, 4:00 PM" for earlier days, "?" if unknown. */
+export function stamp(ts, now = Date.now()) {
+  if (!ts) return "?";
+  const date = new Date(ts);
+  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (sameDay(ts, now)) return time;
+  const day = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${day}, ${time}`;
 }
 
-function hostOf(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
+/** "4:00 PM – 5:12 PM" = first seen open until closed. */
+export function openSpan(entry, now = Date.now()) {
+  return `${stamp(entry.openedAt, now)} – ${stamp(entry.at, now)}`;
 }
 
-/** Entries after the search box and dry-run checkbox are applied. */
-function visible() {
-  const needle = $("search").value.trim().toLowerCase();
-  const showDry = $("showDry").checked;
-  return entries.filter((e) => {
-    if (e.dryRun && !showDry) return false;
-    if (!needle) return true;
-    return `${e.title} ${e.url} ${e.reason}`.toLowerCase().includes(needle);
-  });
-}
+function itemFor(entry, now) {
+  const item = document.createElement("li");
 
-/** Group newest-first entries by day, keeping order. */
-function groupByDay(list) {
-  const days = new Map();
-  for (const entry of list) {
-    const key = dayLabel(entry.at);
-    if (!days.has(key)) days.set(key, []);
-    days.get(key).push(entry);
-  }
-  return days;
-}
-
-function rowFor(entry) {
-  const row = document.createElement("tr");
-  if (entry.dryRun) row.className = "dry";
-
-  const time = row.insertCell();
-  time.className = "time";
-  time.textContent = timeLabel(entry.at) + (entry.dryRun ? " (dry)" : "");
-
-  const tab = row.insertCell();
   const link = document.createElement("a");
   link.href = entry.url;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
-  link.textContent = entry.title || entry.url || "(untitled)";
-  const host = document.createElement("div");
-  host.className = "host";
-  host.textContent = hostOf(entry.url);
-  tab.append(link, host);
+  link.textContent = entry.url;
 
-  const why = row.insertCell();
-  why.className = "reason";
-  why.textContent = entry.reason;
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = `open ${openSpan(entry, now)} · last used ${stamp(entry.lastAccessed, now)}`;
 
-  const action = row.insertCell();
-  if (!entry.dryRun) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Reopen";
-    button.addEventListener("click", () => reopen(entry));
-    action.append(button);
-  }
-  return row;
+  item.append(link, meta);
+  return item;
 }
 
-function render() {
-  const list = visible();
-  const root = $("days");
-  root.replaceChildren();
+/** Only entries that were really closed and have a URL to show. */
+export function usable(entry) {
+  return Boolean(entry && entry.url && !entry.dryRun);
+}
 
-  $("summary").textContent = `${list.length} shown of ${entries.length} logged (newest 200 kept).`;
-  if (list.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty";
-    empty.textContent = "Nothing closed yet.";
-    root.append(empty);
+/** Newest closed first, whatever order storage returned them in. */
+export function newestFirst(entries) {
+  return [...entries].sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
+}
+
+/** A single non-link row for messages ("No closed tabs yet.", errors). */
+function messageItem(text) {
+  const item = document.createElement("li");
+  item.className = "empty";
+  item.textContent = text;
+  return item;
+}
+
+async function render() {
+  const now = Date.now();
+  const list = $("urls");
+  list.replaceChildren();
+
+  let entries;
+  try {
+    entries = newestFirst((await getClosedLog()).filter(usable));
+  } catch (err) {
+    list.append(messageItem(`Could not load the history: ${err.message}`));
     return;
   }
 
-  for (const [label, dayEntries] of groupByDay(list)) {
-    const heading = document.createElement("h2");
-    heading.textContent = `${label} (${dayEntries.length})`;
-    const table = document.createElement("table");
-    const body = table.createTBody();
-    for (const entry of dayEntries) body.append(rowFor(entry));
-    root.append(heading, table);
+  if (entries.length === 0) {
+    list.append(messageItem("No closed tabs yet."));
+    return;
   }
+  for (const entry of entries) list.append(itemFor(entry, now));
 }
 
-/** RFC 4180-style quoting: wrap in quotes, double any inner quote. */
-function csvCell(value) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
-}
-
-function toCsv(list) {
-  const head = ["closed_at", "title", "url", "reason", "dry_run"];
-  const rows = list.map((e) =>
-    [new Date(e.at).toISOString(), e.title, e.url, e.reason, e.dryRun].map(csvCell).join(","),
-  );
-  return [head.join(","), ...rows].join("\n");
-}
-
-function downloadCsv() {
-  const blob = new Blob([toCsv(visible())], { type: "text/csv" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `tabtidy-closed-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-$("search").addEventListener("input", render);
-$("showDry").addEventListener("change", render);
-$("csv").addEventListener("click", downloadCsv);
-$("clear").addEventListener("click", async () => {
-  await clearClosedLog();
-  entries = [];
-  render();
+// Stay current if a pass closes something while the page is open.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.closedLog) render();
 });
 
-// Stay current if a pass runs while the page is open.
-chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area === "local" && changes.closedLog) {
-    entries = await getClosedLog();
-    render();
-  }
-});
-
-entries = await getClosedLog();
-$("showDry").checked = entries.every((e) => e.dryRun); // first-day users only have dry entries
-render();
+await render();
