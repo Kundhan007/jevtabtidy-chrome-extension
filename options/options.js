@@ -59,6 +59,11 @@ async function renderBrain() {
     problems.length > 0 ? `brain.yaml problems: ${problems.join("; ")}` : "brain.yaml loaded with no problems.";
 }
 
+async function renderBrainText() {
+  const res = await fetch(chrome.runtime.getURL("brain.yaml"));
+  $("brainText").value = res.ok ? await res.text() : `could not read brain.yaml (HTTP ${res.status})`;
+}
+
 async function renderLog() {
   const body = $("log");
   body.replaceChildren();
@@ -110,7 +115,7 @@ $("reset").addEventListener("click", async () => {
 $("run").addEventListener("click", async () => {
   $("status").textContent = "Running…";
   await chrome.runtime.sendMessage({ type: "tidy-now" });
-  await Promise.all([renderStatus(), renderLog(), renderActivity(), renderBrain()]);
+  await Promise.all([renderStatus(), renderLog(), renderActivity(), renderBrain(), renderBrainText()]);
 });
 
 async function renderActivity() {
@@ -142,4 +147,4 @@ $("clearLog").addEventListener("click", async () => {
 });
 
 render(await loadConfig());
-await Promise.all([renderStatus(), renderLog(), renderActivity(), renderBrain()]);
+await Promise.all([renderStatus(), renderLog(), renderActivity(), renderBrain(), renderBrainText()]);
