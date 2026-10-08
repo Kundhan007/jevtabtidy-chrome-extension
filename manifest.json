@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "TabTidy",
+  "version": "0.1.0",
+  "description": "Every few minutes: group work tabs, collapse idle groups, sort groups A-Z, close forgotten tabs.",
+  "minimum_chrome_version": "121",
+  "permissions": ["tabs", "tabGroups", "alarms", "storage"],
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "optional_host_permissions": ["https://*/*"],
+  "action": { "default_title": "TabTidy", "default_popup": "popup/popup.html" },
+  "options_ui": { "page": "options/options.html", "open_in_tab": true }
+}
