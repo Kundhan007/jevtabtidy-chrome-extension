@@ -97,6 +97,28 @@ export async function clearClosedLog() {
   await chrome.storage.local.remove(LOG_KEY);
 }
 
+/** Pure: the entries closed together in the newest real (non-dry, not yet undone) pass. */
+export function lastBatch(log) {
+  const live = log.filter((e) => !e.dryRun && !e.undone && e.url);
+  return live.length === 0 ? [] : live.filter((e) => e.at === live[0].at);
+}
+
+/**
+ * Undo the newest pass: reopen what it closed, in the background, and mark the
+ * entries undone so a second click cannot duplicate them. One level only.
+ * Reopened pages are fresh loads and are not put back into their old group.
+ */
+export async function undoLast() {
+  const log = await getClosedLog();
+  const batch = lastBatch(log);
+  for (const entry of batch) {
+    await chrome.tabs.create({ url: entry.url, active: false });
+    entry.undone = true;
+  }
+  if (batch.length > 0) await chrome.storage.local.set({ [LOG_KEY]: log });
+  return batch.length;
+}
+
 /**
  * Reopen a logged tab in the current window (background, not focused).
  * Pages come back fresh: form state and scroll position are not restored.

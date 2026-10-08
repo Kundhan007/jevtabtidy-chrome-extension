@@ -57,9 +57,9 @@ function itemFor(entry, now) {
   return item;
 }
 
-/** Only entries that were really closed and have a URL to show. */
+/** Only entries that were really closed (and not undone) with a URL to show. */
 export function usable(entry) {
-  return Boolean(entry && entry.url && !entry.dryRun);
+  return Boolean(entry && entry.url && !entry.dryRun && !entry.undone);
 }
 
 /** Newest closed first, whatever order storage returned them in. */
