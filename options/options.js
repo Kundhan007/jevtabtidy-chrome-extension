@@ -2,7 +2,7 @@
 
 import { loadConfig, resetConfig, saveConfig } from "../src/config.js";
 import { requestOrigin } from "../src/license.js";
-import { clearLog, countLevels, formatLog, getLog, info } from "../src/log.js";
+import { clearLog, countLevels, filterLevel, formatLog, getLog, info } from "../src/log.js";
 import { clearClosedLog, getClosedLog, reopen } from "../src/reaper.js";
 import { describeRun } from "../src/rules.js";
 
@@ -109,10 +109,12 @@ async function renderActivity() {
   const entries = await getLog();
   const { info: infos, warn: warns, error: errors } = countLevels(entries);
   $("logCounts").textContent = `${infos} info, ${warns} warnings, ${errors} errors`;
-  $("activity").textContent = entries.length > 0 ? formatLog(entries) : "No activity yet.";
+  const shown = filterLevel(entries, $("logLevel").value);
+  $("activity").textContent = shown.length > 0 ? formatLog(shown) : "No activity to show.";
 }
 
 $("logRefresh").addEventListener("click", renderActivity);
+$("logLevel").addEventListener("change", renderActivity);
 $("logClear").addEventListener("click", async () => {
   await clearLog();
   await renderActivity();

@@ -46,6 +46,11 @@
 
   <p><a href="../history/history.html" target="_blank">Open full closed-tabs history →</a></p>
   <h2 id="log">Activity log <small id="logCounts" class="muted"></small>
+    <select id="logLevel">
+      <option value="info">All</option>
+      <option value="warn">Warnings + errors</option>
+      <option value="error">Errors only</option>
+    </select>
     <button type="button" id="logRefresh">Refresh</button>
     <button type="button" id="logCopy">Copy</button>
     <button type="button" id="logClear">Clear</button>

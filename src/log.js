@@ -43,6 +43,14 @@ export function trimLog(entries, now, days = MAX_AGE_DAYS, max = MAX_LINES) {
   return entries.filter((e) => e.t >= oldest).slice(0, max);
 }
 
+const RANK = { info: 0, warn: 1, error: 2 };
+
+/** Entries at `min` level or worse: "info" = all, "warn" = warnings + errors, "error" = errors. */
+export function filterLevel(entries, min = "info") {
+  const floor = RANK[min] ?? 0;
+  return entries.filter((e) => (RANK[e.level] ?? 0) >= floor);
+}
+
 /** The whole log as text, newest first, one line per event. */
 export function formatLog(entries) {
   return entries.map(formatLine).join("\n");
